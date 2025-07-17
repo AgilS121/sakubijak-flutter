@@ -21,6 +21,7 @@ class ApiService {
     };
   }
 
+  // Authentication endpoints
   Future<http.Response> register(
     String nama,
     String email,
@@ -51,6 +52,7 @@ class ApiService {
     return http.post(Uri.parse('$baseUrl/auth/logout'), headers: _headers);
   }
 
+  // Transaksi endpoints
   Future<http.Response> getTransaksi() {
     return http.get(Uri.parse('$baseUrl/transaksi'), headers: _headers);
   }
@@ -89,6 +91,48 @@ class ApiService {
     return http.delete(Uri.parse('$baseUrl/transaksi/$id'), headers: _headers);
   }
 
+  // Kategori endpoints
+  Future<http.Response> getKategori() {
+    return http.get(Uri.parse('$baseUrl/kategori'), headers: _headers);
+  }
+
+  Future<http.Response> createKategori(String namaKategori, String jenis) {
+    return http.post(
+      Uri.parse('$baseUrl/kategori'),
+      headers: _headers,
+      body: jsonEncode({'nama_kategori': namaKategori, 'jenis': jenis}),
+    );
+  }
+
+  Future<http.Response> getKategoriDetail(int id) {
+    return http.get(Uri.parse('$baseUrl/kategori/$id'), headers: _headers);
+  }
+
+  Future<http.Response> updateKategori(
+    int id,
+    String namaKategori,
+    String jenis,
+  ) {
+    return http.put(
+      Uri.parse('$baseUrl/kategori/$id'),
+      headers: _headers,
+      body: jsonEncode({'nama_kategori': namaKategori, 'jenis': jenis}),
+    );
+  }
+
+  Future<http.Response> deleteKategori(int id) {
+    return http.delete(Uri.parse('$baseUrl/kategori/$id'), headers: _headers);
+  }
+
+  // Laporan endpoints
+  Future<http.Response> getLaporan(String mulai, String sampai) {
+    final uri = Uri.parse(
+      '$baseUrl/laporan',
+    ).replace(queryParameters: {'mulai': mulai, 'sampai': sampai});
+    return http.get(uri, headers: _headers);
+  }
+
+  // Tujuan Keuangan endpoints
   Future<http.Response> getTujuan() {
     return http.get(Uri.parse('$baseUrl/tujuan-keuangan'), headers: _headers);
   }
@@ -133,6 +177,7 @@ class ApiService {
     );
   }
 
+  // Tagihan endpoints
   Future<http.Response> getTagihan() {
     return http.get(Uri.parse('$baseUrl/tagihan'), headers: _headers);
   }
@@ -173,14 +218,7 @@ class ApiService {
     return http.delete(Uri.parse('$baseUrl/tagihan/$id'), headers: _headers);
   }
 
-  Future<http.Response> getLaporan(String mulai, String sampai) {
-    final uri = Uri.parse(
-      '$baseUrl/laporan',
-    ).replace(queryParameters: {'mulai': mulai, 'sampai': sampai});
-
-    return http.get(uri, headers: _headers);
-  }
-
+  // Ekspor Data endpoints
   Future<http.Response> eksporData(
     String jenisFile,
     String tanggalMulai,
@@ -197,7 +235,77 @@ class ApiService {
     );
   }
 
-  Future<http.Response> getKategori() {
-    return http.get(Uri.parse('$baseUrl/kategori'), headers: _headers);
+  // Sistem endpoints
+  Future<http.Response> getSistem() {
+    return http.get(Uri.parse('$baseUrl/admin/sistem'), headers: _headers);
+  }
+
+  Future<http.Response> updateSistem(
+    String logo,
+    String deskripsi,
+    String kontakResmi,
+    String alamatAplikasi,
+  ) {
+    return http.post(
+      Uri.parse('$baseUrl/admin/sistem'),
+      headers: _headers,
+      body: jsonEncode({
+        'logo': logo,
+        'deskripsi': deskripsi,
+        'kontak_resmi': kontakResmi,
+        'alamat_aplikasi': alamatAplikasi,
+      }),
+    );
+  }
+
+  // Log endpoints
+  Future<http.Response> getLog({String? tanggal}) {
+    Uri uri = Uri.parse('$baseUrl/log');
+    if (tanggal != null) {
+      uri = uri.replace(queryParameters: {'tanggal': tanggal});
+    }
+    return http.get(uri, headers: _headers);
+  }
+
+  Future<http.Response> createLog(String aksi) {
+    return http.post(
+      Uri.parse('$baseUrl/log'),
+      headers: _headers,
+      body: jsonEncode({'aksi': aksi}),
+    );
+  }
+
+  // Admin utility endpoints (optional - jika diperlukan di backend)
+  Future<http.Response> performBackup() {
+    return http.post(Uri.parse('$baseUrl/admin/backup'), headers: _headers);
+  }
+
+  Future<http.Response> clearCache() {
+    return http.post(
+      Uri.parse('$baseUrl/admin/clear-cache'),
+      headers: _headers,
+    );
+  }
+
+  Future<http.Response> resetSettings() {
+    return http.post(
+      Uri.parse('$baseUrl/admin/reset-settings'),
+      headers: _headers,
+    );
+  }
+
+  Future<http.Response> getTotalUsers() {
+    return http.get(Uri.parse('$baseUrl/admin/total-users'), headers: _headers);
+  }
+
+  Future<http.Response> getTotalKategori() {
+    return http.get(
+      Uri.parse('$baseUrl/admin/total-kategori'),
+      headers: _headers,
+    );
+  }
+
+  Future<http.Response> getAllUsers() {
+    return http.get(Uri.parse('$baseUrl/admin/users'), headers: _headers);
   }
 }

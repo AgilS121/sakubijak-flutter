@@ -80,7 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context: context,
       builder:
           (_) => AlertDialog(
-            title: Text('Gagal'),
+            title: Text('Berhasil'),
             content: Text(message),
             actions: [
               TextButton(

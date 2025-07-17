@@ -1,9 +1,9 @@
-// Login Screen
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:sakubijak/auth/registerScreen.dart';
 import 'package:sakubijak/helper/shared_preferences.dart';
+import 'package:sakubijak/screens/admin/admin_navigation.dart';
 import 'package:sakubijak/screens/mainNavigationScreen.dart';
 import 'package:sakubijak/services/apiService.dart';
 
@@ -33,16 +33,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200 && data['token'] != null) {
         final token = data['token'];
+        final role = data['user']['role']; // Ambil role dari response
 
         // Simpan token ke shared preferences
         await SharedPrefHelper.saveToken(token);
         apiService.setToken(token);
 
-        // Navigasi ke halaman utama
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => MainNavigationScreen()),
-        );
+        // Navigasi berdasarkan role
+        if (role == 'admin') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => AdminNavigationScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => MainNavigationScreen()),
+          );
+        }
       } else {
         _showError(
           data['message'] ?? 'Login gagal, periksa kembali kredensial Anda.',
