@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:sakubijak/helper/shared_preferences.dart';
+import 'package:sakubijak/services/apiService.dart';
 
 class BudgetPage extends StatefulWidget {
   @override
@@ -9,11 +8,13 @@ class BudgetPage extends StatefulWidget {
 }
 
 class _BudgetPageState extends State<BudgetPage> {
-  List<dynamic> _kategoriList = [];
-  bool _isLoading = true;
-
   double _saldo = 0.0;
   double _totalPengeluaran = 0.0;
+  double _totalPemasukan = 0.0;
+  List<Map<String, dynamic>> _transaksi = [];
+  List<dynamic> _pemasukan = [];
+  List<dynamic> _pengeluaran = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -22,81 +23,99 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    final token = await SharedPrefHelper.getToken();
+    final api = ApiService();
+    await api.loadToken();
 
     try {
-      // Ambil kategori
-      final kategoriResponse = await http.get(
-        Uri.parse(
-          'https://sakubijak.adservices.site/api/kategori-with-pengeluaran',
-        ),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
+      // Load transactions (same as dashboard)
+      final response = await api.getTransaksi();
 
-      // Ambil transaksi
-      final transaksiResponse = await http.get(
-        Uri.parse('https://sakubijak.adservices.site/api/transaksi'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
 
-      if (kategoriResponse.statusCode == 200 &&
-          transaksiResponse.statusCode == 200) {
-        final kategoriData = json.decode(kategoriResponse.body);
-        final transaksiData = json.decode(transaksiResponse.body);
+        List<Map<String, dynamic>> transaksi = [];
 
-        List<dynamic> transaksiList = [];
-
-        if (transaksiData is Map<String, dynamic> &&
-            transaksiData.containsKey('data')) {
-          transaksiList = transaksiData['data'];
-        } else if (transaksiData is List) {
-          transaksiList = transaksiData;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('data') && data['data'] is List) {
+            transaksi = List<Map<String, dynamic>>.from(data['data']);
+          }
+        } else if (data is List) {
+          transaksi = List<Map<String, dynamic>>.from(data);
         }
 
+        // Calculate totals (same logic as dashboard)
         double saldo = 0.0;
+        double totalPemasukan = 0.0;
         double totalPengeluaran = 0.0;
 
-        for (var tx in transaksiList) {
-          final kategori = tx['kategori'] as Map<String, dynamic>? ?? {};
-          double jumlah = 0.0;
+        for (var tx in transaksi) {
+          try {
+            final kategori = tx['kategori'] as Map<String, dynamic>? ?? {};
 
-          if (tx['jumlah'] is String) {
-            jumlah = double.tryParse(tx['jumlah']) ?? 0.0;
-          } else if (tx['jumlah'] is num) {
-            jumlah = (tx['jumlah'] as num).toDouble();
-          }
+            double jumlah = 0.0;
+            if (tx['jumlah'] is String) {
+              jumlah = double.tryParse(tx['jumlah'] as String) ?? 0.0;
+            } else if (tx['jumlah'] is num) {
+              jumlah = (tx['jumlah'] as num).toDouble();
+            }
 
-          bool isPemasukan = kategori['jenis'] == 'pemasukan';
-          if (isPemasukan) {
-            saldo += jumlah;
-          } else {
-            saldo -= jumlah;
-            totalPengeluaran += jumlah;
+            bool isPemasukan = kategori['jenis'] == 'pemasukan';
+            if (isPemasukan) {
+              totalPemasukan += jumlah;
+              saldo += jumlah;
+            } else {
+              totalPengeluaran += jumlah;
+              saldo -= jumlah;
+            }
+          } catch (e) {
+            print('Error processing transaction: $e');
           }
         }
 
+        // Load categories for display
+        await _loadKategori(api);
+
         setState(() {
-          _kategoriList = kategoriData;
           _saldo = saldo;
+          _totalPemasukan = totalPemasukan;
           _totalPengeluaran = totalPengeluaran;
+          _transaksi = transaksi;
           _isLoading = false;
         });
       } else {
+        print('Error loading transactions: ${response.statusCode}');
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      print('Error: $e');
+      print('Error loading budget data: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadKategori(ApiService api) async {
+    try {
+      final response = await api.getKategori();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        List kategori = [];
+        if (data is Map<String, dynamic> && data.containsKey('data')) {
+          kategori = data['data'] as List? ?? [];
+        } else if (data is List) {
+          kategori = data;
+        }
+
+        setState(() {
+          _pemasukan =
+              kategori.where((e) => e['jenis'] == 'pemasukan').toList();
+          _pengeluaran =
+              kategori.where((e) => e['jenis'] == 'pengeluaran').toList();
+        });
+      }
+    } catch (e) {
+      print('Error loading categories: $e');
     }
   }
 
@@ -109,185 +128,203 @@ class _BudgetPageState extends State<BudgetPage> {
         );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFF00BFA5),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Padding(
-              padding: EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(Icons.arrow_back, color: Colors.white),
-                  ),
-                  SizedBox(width: 15),
-                  Text(
-                    'Anggaran',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Spacer(),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.notifications_outlined,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Saldo dan Pengeluaran
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Saldo Saat Ini',
-                        style: TextStyle(fontSize: 14, color: Colors.white70),
-                      ),
-                      Text(
-                        'Rp ${_formatCurrency(_saldo)}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Pengeluaran',
-                        style: TextStyle(fontSize: 14, color: Colors.white70),
-                      ),
-                      Text(
-                        'Rp ${_formatCurrency(_totalPengeluaran)}',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 30),
-
-            // Kategori Grid
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(30),
-                    topRight: Radius.circular(30),
-                  ),
-                ),
-                child:
-                    _isLoading
-                        ? Center(child: CircularProgressIndicator())
-                        : Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Column(
-                            children: [
-                              GridView.count(
-                                shrinkWrap: true,
-                                crossAxisCount: 3,
-                                mainAxisSpacing: 15,
-                                crossAxisSpacing: 15,
-                                children: [
-                                  ..._kategoriList.take(5).map((item) {
-                                    return GestureDetector(
-                                      onTap: () {
-                                        _showDetailDialog(item);
-                                      },
-                                      child: _buildCategoryItem(
-                                        item['nama_kategori'],
-                                        Icons.category,
-                                        Colors.blue,
-                                      ),
-                                    );
-                                  }).toList(),
-                                  if (_kategoriList.length > 5)
-                                    _buildCategoryItem(
-                                      'More',
-                                      Icons.add,
-                                      Colors.blue,
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryItem(String title, IconData icon, Color color) {
+  Widget buildHeader() {
     return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(15),
+        color: Color(0xFF00BFA5), // Same color as dashboard
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.white, size: 30),
+          Text(
+            'Saldo Saat Ini',
+            style: TextStyle(color: Colors.white70, fontSize: 16),
+          ),
           SizedBox(height: 8),
           Text(
-            title,
+            'Rp ${_formatCurrency(_saldo)}',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
             ),
-            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Card(
+                  color: Colors.green.shade50,
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Pemasukan',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Rp ${_formatCurrency(_totalPemasukan)}',
+                          style: TextStyle(
+                            color: Colors.green.shade800,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Card(
+                  color: Colors.red.shade50,
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Pengeluaran',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Rp ${_formatCurrency(_totalPengeluaran)}',
+                          style: TextStyle(
+                            color: Colors.red.shade800,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  void _showDetailDialog(dynamic kategori) {
-    showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: Text(kategori['nama_kategori']),
-            content: Text(
-              'Total pengeluaran: Rp ${_formatCurrency((kategori['total_pengeluaran'] ?? 0).toDouble())}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Tutup'),
-              ),
-            ],
+  Widget buildKategoriList(String title, List<dynamic> list, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
+          SizedBox(height: 8),
+          list.isEmpty
+              ? Container(
+                height: 60,
+                child: Center(
+                  child: Text(
+                    "Belum ada data kategori",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                ),
+              )
+              : Column(
+                children:
+                    list.map((item) {
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: color.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                Icons.category,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item['nama_kategori'] ?? 'Kategori',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    item['jenis']?.toString().toUpperCase() ??
+                                        '',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+              ),
+          SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Anggaran'),
+        backgroundColor: Color(0xFF00BFA5), // Same color as dashboard
+        foregroundColor: Colors.white,
+      ),
+      body:
+          _isLoading
+              ? Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                onRefresh: _loadData,
+                child: ListView(
+                  children: [
+                    buildHeader(),
+                    SizedBox(height: 16),
+                    buildKategoriList(
+                      "Daftar Pemasukan",
+                      _pemasukan,
+                      Colors.green,
+                    ),
+                    buildKategoriList(
+                      "Daftar Pengeluaran",
+                      _pengeluaran,
+                      Colors.red,
+                    ),
+                    SizedBox(height: 32),
+                  ],
+                ),
+              ),
     );
   }
 }

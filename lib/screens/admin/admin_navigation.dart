@@ -18,7 +18,7 @@ class _AdminNavigationScreenState extends State<AdminNavigationScreen> {
     AdminDashboardScreen(),
     AdminUsersScreen(),
     AdminCategoriesScreen(),
-    AdminAuditLogScreen(),
+    SimpleAuditLogTest(),
     AdminSettingsScreen(),
   ];
 

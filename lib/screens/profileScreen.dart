@@ -196,10 +196,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF00D4AA),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back, color: Colors.white),
+        //   onPressed: () => Navigator.pop(context),
+        // ),
         title: const Text(
           'Profile',
           style: TextStyle(
@@ -318,27 +318,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildProfileMenuItem(
-                    icon: Icons.edit,
-                    iconColor: const Color(0xFF3B82F6),
-                    title: 'Edit Profile',
-                    subtitle: 'Ubah informasi profil Anda',
-                    onTap: _editProfile,
-                  ),
-                  _buildProfileMenuItem(
-                    icon: Icons.security,
-                    iconColor: const Color(0xFF8B5CF6),
-                    title: 'Keamanan',
-                    subtitle: 'Ubah password dan PIN',
-                    onTap: _openSecurity,
-                  ),
-                  _buildProfileMenuItem(
-                    icon: Icons.settings,
-                    iconColor: const Color(0xFF6B7280),
-                    title: 'Pengaturan',
-                    subtitle: 'Preferensi aplikasi',
-                    onTap: _openSettings,
-                  ),
+                  // _buildProfileMenuItem(
+                  //   icon: Icons.edit,
+                  //   iconColor: const Color(0xFF3B82F6),
+                  //   title: 'Edit Profile',
+                  //   subtitle: 'Ubah informasi profil Anda',
+                  //   onTap: _editProfile,
+                  // ),
+                  // _buildProfileMenuItem(
+                  //   icon: Icons.security,
+                  //   iconColor: const Color(0xFF8B5CF6),
+                  //   title: 'Keamanan',
+                  //   subtitle: 'Ubah password dan PIN',
+                  //   onTap: _openSecurity,
+                  // ),
+                  // _buildProfileMenuItem(
+                  //   icon: Icons.settings,
+                  //   iconColor: const Color(0xFF6B7280),
+                  //   title: 'Pengaturan',
+                  //   subtitle: 'Preferensi aplikasi',
+                  //   onTap: _openSettings,
+                  // ),
                   _buildProfileMenuItem(
                     icon: Icons.help_outline,
                     iconColor: const Color(0xFF10B981),

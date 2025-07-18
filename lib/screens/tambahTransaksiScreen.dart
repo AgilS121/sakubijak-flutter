@@ -38,9 +38,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       print("Body Kategori: ${response.body}");
 
       if (response.statusCode == 200) {
-        final List<dynamic> jsonData = jsonDecode(response.body);
+        final Map<String, dynamic> jsonData = jsonDecode(response.body);
+        final List<dynamic> allKategoriRaw = jsonData['data'];
+
         final allKategori =
-            jsonData
+            allKategoriRaw
                 .map<Map<String, dynamic>>(
                   (item) => Map<String, dynamic>.from(item),
                 )

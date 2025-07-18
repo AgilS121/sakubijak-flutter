@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:sakubijak/auth/registerScreen.dart';
 import 'package:sakubijak/helper/shared_preferences.dart';
@@ -33,13 +32,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200 && data['token'] != null) {
         final token = data['token'];
-        final role = data['user']['role']; // Ambil role dari response
+        final role = data['user']['role'];
 
-        // Simpan token ke shared preferences
         await SharedPrefHelper.saveToken(token);
         apiService.setToken(token);
 
-        // Navigasi berdasarkan role
         if (role == 'admin') {
           Navigator.pushReplacement(
             context,
@@ -86,10 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFF00BFA5),
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: EdgeInsets.all(20),
               child: Row(
@@ -103,30 +100,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(Icons.close, color: Colors.white),
-                  ),
                 ],
               ),
             ),
             SizedBox(height: 40),
-
-            // Form Container
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
                 ),
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: EdgeInsets.all(30),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(height: 20),
 
@@ -137,7 +124,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         hintText: 'example@email.com',
                         obscureText: false,
                       ),
-
                       SizedBox(height: 20),
 
                       // Password
@@ -160,7 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                       ),
-
                       SizedBox(height: 30),
 
                       // Button Login
@@ -185,17 +170,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                       ),
-
                       SizedBox(height: 20),
 
-                      TextButton(
-                        onPressed: () {},
-                        child: Text(
-                          'Lupa Kata Sandi?',
-                          style: TextStyle(color: Colors.grey[600]),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {},
+                          child: Text(
+                            'Lupa Kata Sandi?',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
                         ),
                       ),
-
                       SizedBox(height: 10),
 
                       OutlinedButton(

@@ -259,12 +259,19 @@ class ApiService {
   }
 
   // Log endpoints
-  Future<http.Response> getLog({String? tanggal}) {
-    Uri uri = Uri.parse('$baseUrl/log');
-    if (tanggal != null) {
-      uri = uri.replace(queryParameters: {'tanggal': tanggal});
-    }
-    return http.get(uri, headers: _headers);
+  // di ApiService
+  Future<http.Response> getLog() async {
+    final token = await SharedPrefHelper.getToken();
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/admin/logs',
+      ), // pastikan ini sesuai dengan route Laravel
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    return response;
   }
 
   Future<http.Response> createLog(String aksi) {
@@ -307,5 +314,13 @@ class ApiService {
 
   Future<http.Response> getAllUsers() {
     return http.get(Uri.parse('$baseUrl/admin/users'), headers: _headers);
+  }
+
+  Future<http.Response> getSummary() async {
+    final token = await SharedPrefHelper.getToken();
+    return await http.get(
+      Uri.parse('https://sakubijak.adservices.site/api/summary'),
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    );
   }
 }
