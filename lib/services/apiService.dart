@@ -14,9 +14,22 @@ class ApiService {
     _token = token;
   }
 
+  Future<Map<String, String>> _getHeaders() async {
+    if (_token == null) {
+      await loadToken();
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (_token != null) 'Authorization': 'Bearer $_token',
+    };
+  }
+
+  // Synchronous headers getter for backward compatibility
   Map<String, String> get _headers {
     return {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       if (_token != null) 'Authorization': 'Bearer $_token',
     };
   }
@@ -27,10 +40,11 @@ class ApiService {
     String email,
     String password,
     String pin,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/auth/register'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({
         'nama': nama,
         'email': email,
@@ -40,21 +54,24 @@ class ApiService {
     );
   }
 
-  Future<http.Response> login(String email, String password) {
+  Future<http.Response> login(String email, String password) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/auth/login'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'email': email, 'password': password}),
     );
   }
 
-  Future<http.Response> logout() {
-    return http.post(Uri.parse('$baseUrl/auth/logout'), headers: _headers);
+  Future<http.Response> logout() async {
+    final headers = await _getHeaders();
+    return http.post(Uri.parse('$baseUrl/auth/logout'), headers: headers);
   }
 
   // Transaksi endpoints
-  Future<http.Response> getTransaksi() {
-    return http.get(Uri.parse('$baseUrl/transaksi'), headers: _headers);
+  Future<http.Response> getTransaksi() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/transaksi'), headers: headers);
   }
 
   Future<http.Response> createTransaksi(
@@ -62,10 +79,11 @@ class ApiService {
     int jumlah,
     String deskripsi,
     String tanggal,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/transaksi'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({
         'id_kategori': idKategori,
         'jumlah': jumlah,
@@ -75,56 +93,71 @@ class ApiService {
     );
   }
 
-  Future<http.Response> getTransaksiDetail(int id) {
-    return http.get(Uri.parse('$baseUrl/transaksi/$id'), headers: _headers);
+  Future<http.Response> getTransaksiDetail(int id) async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/transaksi/$id'), headers: headers);
   }
 
-  Future<http.Response> updateTransaksi(int id, int jumlah, String deskripsi) {
+  Future<http.Response> updateTransaksi(
+    int id,
+    int jumlah,
+    String deskripsi,
+  ) async {
+    final headers = await _getHeaders();
     return http.put(
       Uri.parse('$baseUrl/transaksi/$id'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'jumlah': jumlah, 'deskripsi': deskripsi}),
     );
   }
 
-  Future<http.Response> deleteTransaksi(int id) {
-    return http.delete(Uri.parse('$baseUrl/transaksi/$id'), headers: _headers);
+  Future<http.Response> deleteTransaksi(int id) async {
+    final headers = await _getHeaders();
+    return http.delete(Uri.parse('$baseUrl/transaksi/$id'), headers: headers);
   }
 
   // Kategori endpoints
-  Future<http.Response> getKategori() {
-    return http.get(Uri.parse('$baseUrl/kategori'), headers: _headers);
+  Future<http.Response> getKategori() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/kategori'), headers: headers);
   }
 
-  Future<http.Response> createKategori(String namaKategori, String jenis) {
+  Future<http.Response> createKategori(
+    String namaKategori,
+    String jenis,
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/kategori'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'nama_kategori': namaKategori, 'jenis': jenis}),
     );
   }
 
-  Future<http.Response> getKategoriDetail(int id) {
-    return http.get(Uri.parse('$baseUrl/kategori/$id'), headers: _headers);
+  Future<http.Response> getKategoriDetail(int id) async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/kategori/$id'), headers: headers);
   }
 
   Future<http.Response> updateKategori(
     int id,
     String namaKategori,
     String jenis,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.put(
       Uri.parse('$baseUrl/kategori/$id'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'nama_kategori': namaKategori, 'jenis': jenis}),
     );
   }
 
-  Future<http.Response> deleteKategori(int id) {
-    return http.delete(Uri.parse('$baseUrl/kategori/$id'), headers: _headers);
+  Future<http.Response> deleteKategori(int id) async {
+    final headers = await _getHeaders();
+    return http.delete(Uri.parse('$baseUrl/kategori/$id'), headers: headers);
   }
 
-  // Laporan endpoints
+  // Token validation
   Future<bool> validateToken() async {
     if (_token == null) {
       await loadToken();
@@ -135,12 +168,8 @@ class ApiService {
     }
 
     try {
-      final url = Uri.parse('$baseUrl/api/user');
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_token',
-      };
+      final url = Uri.parse('$baseUrl/user'); // Fixed: removed duplicate /api
+      final headers = await _getHeaders();
 
       final response = await http.get(url, headers: headers);
 
@@ -157,8 +186,9 @@ class ApiService {
   }
 
   // Tujuan Keuangan endpoints
-  Future<http.Response> getTujuan() {
-    return http.get(Uri.parse('$baseUrl/tujuan-keuangan'), headers: _headers);
+  Future<http.Response> getTujuan() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/tujuan-keuangan'), headers: headers);
   }
 
   Future<http.Response> createTujuan(
@@ -166,10 +196,11 @@ class ApiService {
     int targetUang,
     int uangTerkumpul,
     String tanggalTarget,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/tujuan-keuangan'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({
         'judul': judul,
         'target_uang': targetUang,
@@ -179,31 +210,65 @@ class ApiService {
     );
   }
 
-  Future<http.Response> getTujuanDetail(int id) {
+  Future<http.Response> getTujuanDetail(int id) async {
+    final headers = await _getHeaders();
     return http.get(
       Uri.parse('$baseUrl/tujuan-keuangan/$id'),
-      headers: _headers,
+      headers: headers,
     );
   }
 
-  Future<http.Response> updateTujuan(int id, int uangTerkumpul) {
+  Future<http.Response> updateTujuan(int id, int uangTerkumpul) async {
+    final headers = await _getHeaders();
     return http.put(
       Uri.parse('$baseUrl/tujuan-keuangan/$id'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'uang_terkumpul': uangTerkumpul}),
     );
   }
 
-  Future<http.Response> deleteTujuan(int id) {
+  Future<http.Response> deleteTujuan(int id) async {
+    final headers = await _getHeaders();
     return http.delete(
       Uri.parse('$baseUrl/tujuan-keuangan/$id'),
-      headers: _headers,
+      headers: headers,
+    );
+  }
+
+  // Notifikasi endpoints
+  Future<http.Response> getNotifikasi() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/notifikasi'), headers: headers);
+  }
+
+  Future<http.Response> getTagihanJatuhTempo() async {
+    final headers = await _getHeaders();
+    return http.get(
+      Uri.parse('$baseUrl/notifikasi/tagihan-jatuh-tempo'),
+      headers: headers,
+    );
+  }
+
+  Future<http.Response> getUnreadCount() async {
+    final headers = await _getHeaders();
+    return http.get(
+      Uri.parse('$baseUrl/notifikasi/unread-count'),
+      headers: headers,
+    );
+  }
+
+  Future<http.Response> markAsRead(int id) async {
+    final headers = await _getHeaders();
+    return http.post(
+      Uri.parse('$baseUrl/notifikasi/$id/mark-read'),
+      headers: headers,
     );
   }
 
   // Tagihan endpoints
-  Future<http.Response> getTagihan() {
-    return http.get(Uri.parse('$baseUrl/tagihan'), headers: _headers);
+  Future<http.Response> getTagihan() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/tagihan'), headers: headers);
   }
 
   Future<http.Response> createTagihan(
@@ -212,10 +277,11 @@ class ApiService {
     String tanggalJatuhTempo,
     bool sudahDibayar,
     String pengulangan,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/tagihan'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({
         'judul_tagihan': judul,
         'jumlah': jumlah,
@@ -226,27 +292,29 @@ class ApiService {
     );
   }
 
-  Future<http.Response> getTagihanDetail(int id) {
-    return http.get(Uri.parse('$baseUrl/tagihan/$id'), headers: _headers);
+  Future<http.Response> getTagihanDetail(int id) async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/tagihan/$id'), headers: headers);
   }
 
-  Future<http.Response> updateTagihan(int id, bool sudahDibayar) {
+  Future<http.Response> updateTagihan(int id, bool sudahDibayar) async {
+    final headers = await _getHeaders();
     return http.put(
       Uri.parse('$baseUrl/tagihan/$id'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'sudah_dibayar': sudahDibayar}),
     );
   }
 
-  Future<http.Response> deleteTagihan(int id) {
-    return http.delete(Uri.parse('$baseUrl/tagihan/$id'), headers: _headers);
+  Future<http.Response> deleteTagihan(int id) async {
+    final headers = await _getHeaders();
+    return http.delete(Uri.parse('$baseUrl/tagihan/$id'), headers: headers);
   }
 
-  // Ekspor Data endpoints
-
   // Sistem endpoints
-  Future<http.Response> getSistem() {
-    return http.get(Uri.parse('$baseUrl/admin/sistem'), headers: _headers);
+  Future<http.Response> getSistem() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/admin/sistem'), headers: headers);
   }
 
   Future<http.Response> updateSistem(
@@ -254,10 +322,11 @@ class ApiService {
     String deskripsi,
     String kontakResmi,
     String alamatAplikasi,
-  ) {
+  ) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/admin/sistem'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({
         'logo': logo,
         'deskripsi': deskripsi,
@@ -268,69 +337,60 @@ class ApiService {
   }
 
   // Log endpoints
-  // di ApiService
   Future<http.Response> getLog() async {
-    final token = await SharedPrefHelper.getToken();
-    final response = await http.get(
-      Uri.parse(
-        '$baseUrl/admin/logs',
-      ), // pastikan ini sesuai dengan route Laravel
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    return response;
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/admin/logs'), headers: headers);
   }
 
-  Future<http.Response> createLog(String aksi) {
+  Future<http.Response> createLog(String aksi) async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/log'),
-      headers: _headers,
+      headers: headers,
       body: jsonEncode({'aksi': aksi}),
     );
   }
 
-  // Admin utility endpoints (optional - jika diperlukan di backend)
-  Future<http.Response> performBackup() {
-    return http.post(Uri.parse('$baseUrl/admin/backup'), headers: _headers);
+  // Admin utility endpoints
+  Future<http.Response> performBackup() async {
+    final headers = await _getHeaders();
+    return http.post(Uri.parse('$baseUrl/admin/backup'), headers: headers);
   }
 
-  Future<http.Response> clearCache() {
-    return http.post(
-      Uri.parse('$baseUrl/admin/clear-cache'),
-      headers: _headers,
-    );
+  Future<http.Response> clearCache() async {
+    final headers = await _getHeaders();
+    return http.post(Uri.parse('$baseUrl/admin/clear-cache'), headers: headers);
   }
 
-  Future<http.Response> resetSettings() {
+  Future<http.Response> resetSettings() async {
+    final headers = await _getHeaders();
     return http.post(
       Uri.parse('$baseUrl/admin/reset-settings'),
-      headers: _headers,
+      headers: headers,
     );
   }
 
-  Future<http.Response> getTotalUsers() {
-    return http.get(Uri.parse('$baseUrl/admin/total-users'), headers: _headers);
+  Future<http.Response> getTotalUsers() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/admin/total-users'), headers: headers);
   }
 
-  Future<http.Response> getTotalKategori() {
+  Future<http.Response> getTotalKategori() async {
+    final headers = await _getHeaders();
     return http.get(
       Uri.parse('$baseUrl/admin/total-kategori'),
-      headers: _headers,
+      headers: headers,
     );
   }
 
-  Future<http.Response> getAllUsers() {
-    return http.get(Uri.parse('$baseUrl/admin/users'), headers: _headers);
+  Future<http.Response> getAllUsers() async {
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/admin/users'), headers: headers);
   }
 
   Future<http.Response> getSummary() async {
-    final token = await SharedPrefHelper.getToken();
-    return await http.get(
-      Uri.parse('https://sakubijak.adservices.site/api/summary'),
-      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-    );
+    final headers = await _getHeaders();
+    return http.get(Uri.parse('$baseUrl/summary'), headers: headers);
   }
 
   Future<http.Response> eksporData(
@@ -338,14 +398,7 @@ class ApiService {
     String tanggalMulai,
     String tanggalSampai,
   ) async {
-    if (_token == null) {
-      await loadToken();
-    }
-
-    if (_token == null) {
-      throw Exception('Token tidak ditemukan. Silakan login ulang.');
-    }
-
+    final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/ekspor');
 
     print('Ekspor URL: $url');
@@ -353,12 +406,6 @@ class ApiService {
     print('Jenis File: $jenisFile');
     print('Tanggal Mulai: $tanggalMulai');
     print('Tanggal Sampai: $tanggalSampai');
-
-    final headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $_token',
-    };
 
     final body = jsonEncode({
       'jenis_file': jenisFile,
@@ -377,55 +424,32 @@ class ApiService {
     return response;
   }
 
-  // Method untuk mendapatkan laporan
   Future<http.Response> getLaporan(String mulai, String sampai) async {
-    if (_token == null) {
-      await loadToken();
-    }
-
-    if (_token == null) {
-      throw Exception('Token tidak ditemukan. Silakan login ulang.');
-    }
-
+    final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/laporan?mulai=$mulai&sampai=$sampai');
 
-    final headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $_token',
-    };
-
     final response = await http.get(url, headers: headers);
-
     return response;
   }
 
   Future<http.Response> updateProfile(Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/profile/update');
 
     final response = await http.put(
       url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_token',
-      },
-      body: json.encode(data),
+      headers: headers,
+      body: jsonEncode(data),
     );
 
     return response;
   }
 
   Future<http.Response> getProfile() async {
+    final headers = await _getHeaders();
     final url = Uri.parse('$baseUrl/profile');
 
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_token',
-      },
-    );
-
+    final response = await http.get(url, headers: headers);
     return response;
   }
 }

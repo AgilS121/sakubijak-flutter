@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:sakubijak/screens/tambahTransaksiScreen.dart';
 import 'package:sakubijak/screens/targetScreen.dart';
+import 'package:sakubijak/screens/notifikasiScreen.dart';
 import 'package:sakubijak/services/apiService.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -14,7 +15,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _saldo = 0.0;
   double _targetKeuangan = 0.0;
   List<Map<String, dynamic>> _transaksi = [];
+  int _unreadNotifCount = 0;
   bool _isLoading = true;
+
+  final ApiService _notifikasiService = ApiService();
 
   @override
   void initState() {
@@ -78,6 +82,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Load target keuangan
         await _loadTargetKeuangan(api);
 
+        // Load notification count
+        await _loadNotificationCount();
+
         setState(() {
           _saldo = saldo;
           _transaksi = transaksi;
@@ -133,6 +140,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _loadNotificationCount() async {
+    try {
+      final response = await _notifikasiService.getUnreadCount();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _unreadNotifCount = data['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading notification count: $e');
+      setState(() {
+        _unreadNotifCount = 0;
+      });
+    }
+  }
+
   String _formatCurrency(double amount) {
     return amount
         .toStringAsFixed(0)
@@ -172,16 +196,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.notifications_outlined,
-                      color: Colors.white,
+                  GestureDetector(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => NotifikasiScreen()),
+                      );
+                      if (result == true) {
+                        _loadNotificationCount();
+                      }
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Icon(
+                              Icons.notifications_outlined,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (_unreadNotifCount > 0)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                padding: EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                constraints: BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  _unreadNotifCount > 9
+                                      ? '9+'
+                                      : _unreadNotifCount.toString(),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
