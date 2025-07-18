@@ -125,11 +125,35 @@ class ApiService {
   }
 
   // Laporan endpoints
-  Future<http.Response> getLaporan(String mulai, String sampai) {
-    final uri = Uri.parse(
-      '$baseUrl/laporan',
-    ).replace(queryParameters: {'mulai': mulai, 'sampai': sampai});
-    return http.get(uri, headers: _headers);
+  Future<bool> validateToken() async {
+    if (_token == null) {
+      await loadToken();
+    }
+
+    if (_token == null) {
+      return false;
+    }
+
+    try {
+      final url = Uri.parse('$baseUrl/api/user');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_token',
+      };
+
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('Token validation failed: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('Token validation error: $e');
+      return false;
+    }
   }
 
   // Tujuan Keuangan endpoints
@@ -219,21 +243,6 @@ class ApiService {
   }
 
   // Ekspor Data endpoints
-  Future<http.Response> eksporData(
-    String jenisFile,
-    String tanggalMulai,
-    String tanggalSampai,
-  ) {
-    return http.post(
-      Uri.parse('$baseUrl/ekspor'),
-      headers: _headers,
-      body: jsonEncode({
-        'jenis_file': jenisFile,
-        'tanggal_mulai': tanggalMulai,
-        'tanggal_sampai': tanggalSampai,
-      }),
-    );
-  }
 
   // Sistem endpoints
   Future<http.Response> getSistem() {
@@ -322,5 +331,101 @@ class ApiService {
       Uri.parse('https://sakubijak.adservices.site/api/summary'),
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
+  }
+
+  Future<http.Response> eksporData(
+    String jenisFile,
+    String tanggalMulai,
+    String tanggalSampai,
+  ) async {
+    if (_token == null) {
+      await loadToken();
+    }
+
+    if (_token == null) {
+      throw Exception('Token tidak ditemukan. Silakan login ulang.');
+    }
+
+    final url = Uri.parse('$baseUrl/ekspor');
+
+    print('Ekspor URL: $url');
+    print('Token: $_token');
+    print('Jenis File: $jenisFile');
+    print('Tanggal Mulai: $tanggalMulai');
+    print('Tanggal Sampai: $tanggalSampai');
+
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $_token',
+    };
+
+    final body = jsonEncode({
+      'jenis_file': jenisFile,
+      'tanggal_mulai': tanggalMulai,
+      'tanggal_sampai': tanggalSampai,
+    });
+
+    print('Request headers: $headers');
+    print('Request body: $body');
+
+    final response = await http.post(url, headers: headers, body: body);
+
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    return response;
+  }
+
+  // Method untuk mendapatkan laporan
+  Future<http.Response> getLaporan(String mulai, String sampai) async {
+    if (_token == null) {
+      await loadToken();
+    }
+
+    if (_token == null) {
+      throw Exception('Token tidak ditemukan. Silakan login ulang.');
+    }
+
+    final url = Uri.parse('$baseUrl/laporan?mulai=$mulai&sampai=$sampai');
+
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $_token',
+    };
+
+    final response = await http.get(url, headers: headers);
+
+    return response;
+  }
+
+  Future<http.Response> updateProfile(Map<String, dynamic> data) async {
+    final url = Uri.parse('$baseUrl/profile/update');
+
+    final response = await http.put(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: json.encode(data),
+    );
+
+    return response;
+  }
+
+  Future<http.Response> getProfile() async {
+    final url = Uri.parse('$baseUrl/profile');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+    );
+
+    return response;
   }
 }

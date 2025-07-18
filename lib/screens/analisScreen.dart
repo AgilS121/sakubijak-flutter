@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:sakubijak/helper/shared_preferences.dart';
 import 'package:sakubijak/services/apiService.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
+
+import 'package:url_launcher/url_launcher.dart';
 
 class AnalysisScreen extends StatefulWidget {
   @override
@@ -322,7 +325,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final api = ApiService();
     await api.loadToken();
 
-    // Get the current selected month index
     int monthIndex = months.indexOf(selectedMonth);
     final now = DateTime.now();
     final selectedDate = DateTime(now.year, monthIndex + 1, 1);
@@ -333,7 +335,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     ).format(DateTime(selectedDate.year, selectedDate.month + 1, 0));
 
     try {
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -350,27 +351,88 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       );
 
       final response = await api.eksporData('pdf', mulai, sampai);
-      Navigator.pop(context); // Close loading dialog
+
+      // Tutup loading dialog
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('Export response status: ${response.statusCode}');
+      print('Export response body: ${response.body}');
 
       if (response.statusCode == 200) {
-        // Show success message
+        final json = jsonDecode(response.body);
+
+        if (json['status'] == true) {
+          String? fileUrl = json['file_url'];
+
+          if (fileUrl != null) {
+            print('Opening URL: $fileUrl');
+
+            // Buka URL di browser
+            final launched = await launchUrl(
+              Uri.parse(fileUrl),
+              mode:
+                  LaunchMode
+                      .externalApplication, // Atau LaunchMode.platformDefault
+            );
+
+            if (launched) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Laporan $selectedMonth berhasil dibuka'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Gagal membuka browser'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('URL file tidak ditemukan'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(json['message'] ?? 'Gagal mengekspor data'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else if (response.statusCode == 401) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Laporan $selectedMonth berhasil diunduh'),
-            backgroundColor: Colors.green,
+            content: Text('Sesi berakhir. Silakan login ulang.'),
+            backgroundColor: Colors.red,
           ),
         );
+        // Redirect ke login
+        // Navigator.pushReplacementNamed(context, '/login');
       } else {
-        // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal mengunduh laporan $selectedMonth'),
+            content: Text('Gagal mengunduh laporan (${response.statusCode})'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      print('Download error: $e');
+
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -378,6 +440,42 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         ),
       );
     }
+  }
+
+  // Helper method untuk menampilkan URL jika gagal auto-launch
+  void _showUrlDialog(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Download Manual'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Silakan copy URL berikut dan buka di browser:'),
+                SizedBox(height: 10),
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    url,
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+    );
   }
 
   String _formatCurrency(double amount) {
@@ -621,7 +719,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  'Debug: ${transactions.length} transaksi ditemukan',
+                                  '${transactions.length} transaksi ditemukan',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.blue[800],

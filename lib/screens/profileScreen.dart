@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sakubijak/auth/loginScreen.dart';
 import 'package:sakubijak/helper/shared_preferences.dart';
+import 'package:sakubijak/screens/editprofile.dart';
 import 'dart:convert';
 
 import 'package:sakubijak/services/apiService.dart';
@@ -41,7 +42,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       } else {
         // Fallback: try to get from any available endpoint
-        // Since there's no user profile endpoint, we'll use stored data
         setState(() {
           _userName = 'User';
           _userEmail = '';
@@ -159,7 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _editProfile() {
-    // Navigate to edit profile page
+    // Navigate to edit profile page dengan data user yang sudah ada
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -167,8 +167,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     ).then((result) {
       if (result == true) {
-        // Refresh profile data if edited
+        // Refresh profile data if edited successfully
         _loadUserData();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile berhasil diperbarui'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     });
   }
@@ -196,10 +204,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF00D4AA),
         elevation: 0,
-        // leading: IconButton(
-        //   icon: const Icon(Icons.arrow_back, color: Colors.white),
-        //   onPressed: () => Navigator.pop(context),
-        // ),
         title: const Text(
           'Profile',
           style: TextStyle(
@@ -318,34 +322,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // _buildProfileMenuItem(
-                  //   icon: Icons.edit,
-                  //   iconColor: const Color(0xFF3B82F6),
-                  //   title: 'Edit Profile',
-                  //   subtitle: 'Ubah informasi profil Anda',
-                  //   onTap: _editProfile,
-                  // ),
-                  // _buildProfileMenuItem(
-                  //   icon: Icons.security,
-                  //   iconColor: const Color(0xFF8B5CF6),
-                  //   title: 'Keamanan',
-                  //   subtitle: 'Ubah password dan PIN',
-                  //   onTap: _openSecurity,
-                  // ),
-                  // _buildProfileMenuItem(
-                  //   icon: Icons.settings,
-                  //   iconColor: const Color(0xFF6B7280),
-                  //   title: 'Pengaturan',
-                  //   subtitle: 'Preferensi aplikasi',
-                  //   onTap: _openSettings,
-                  // ),
+                  _buildProfileMenuItem(
+                    icon: Icons.edit,
+                    iconColor: const Color(0xFF3B82F6),
+                    title: 'Edit Profile',
+                    subtitle: 'Ubah informasi profil Anda',
+                    onTap: _editProfile, // Method yang sudah diupdate
+                  ),
                   _buildProfileMenuItem(
                     icon: Icons.help_outline,
                     iconColor: const Color(0xFF10B981),
                     title: 'Bantuan',
                     subtitle: 'FAQ dan dukungan',
                     onTap: () {
-                      // Show help dialog or navigate to help page
                       _showHelpDialog();
                     },
                   ),
@@ -484,24 +473,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // Placeholder screens for navigation
-class EditProfileScreen extends StatelessWidget {
-  final Map<String, dynamic>? userData;
-
-  const EditProfileScreen({Key? key, this.userData}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Profile'),
-        backgroundColor: const Color(0xFF00D4AA),
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(child: Text('Edit Profile Page - Coming Soon')),
-    );
-  }
-}
-
 class SecurityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
