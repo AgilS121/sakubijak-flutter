@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:sakubijak/auth/pinsetupscreen.dart';
 import 'package:sakubijak/auth/registerScreen.dart';
 import 'package:sakubijak/helper/shared_preferences.dart';
 import 'package:sakubijak/screens/admin/admin_navigation.dart';
@@ -34,19 +35,35 @@ class _LoginScreenState extends State<LoginScreen> {
         final token = data['token'];
         final role = data['user']['role'];
 
+        // Simpan token, role, dan email
         await SharedPrefHelper.saveToken(token);
+        await SharedPrefHelper.saveUserRole(role);
+        await SharedPrefHelper.saveUserEmail(email); // Tambah ini!
         apiService.setToken(token);
 
-        if (role == 'admin') {
+        // Cek apakah ini first login
+        final isFirstLogin = await SharedPrefHelper.isFirstLogin();
+
+        if (isFirstLogin) {
+          // First login - set PIN terlebih dahulu
+          await SharedPrefHelper.setFirstLogin(false);
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => AdminNavigationScreen()),
+            MaterialPageRoute(builder: (_) => PinSetupScreen(userRole: role)),
           );
         } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => MainNavigationScreen()),
-          );
+          // Bukan first login - langsung ke halaman utama
+          if (role == 'admin') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => AdminNavigationScreen()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => MainNavigationScreen()),
+            );
+          }
         }
       } else {
         _showError(

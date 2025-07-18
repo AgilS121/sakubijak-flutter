@@ -452,4 +452,68 @@ class ApiService {
     final response = await http.get(url, headers: headers);
     return response;
   }
+
+  Future<http.Response> setPin(String pin) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/set-pin'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: jsonEncode({'pin': pin}),
+    );
+    return response;
+  }
+
+  // Login dengan PIN
+  Future<http.Response> loginWithPin(String email, String pin) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/pin-login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'pin': pin}),
+    );
+    return response;
+  }
+
+  // Cek status PIN user
+  Future<http.Response> checkPinStatus() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/check-pin-status'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+    );
+    return response;
+  }
+
+  // Update PIN
+  Future<http.Response> updatePin(String currentPin, String newPin) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/update-pin'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: jsonEncode({
+        'current_pin': currentPin,
+        'new_pin': newPin,
+        'confirm_pin': newPin,
+      }),
+    );
+    return response;
+  }
+
+  // Reset PIN (admin only)
+  Future<http.Response> resetPin(String email, String newPin) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/reset-pin'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: jsonEncode({'email': email, 'new_pin': newPin}),
+    );
+    return response;
+  }
 }
