@@ -13,17 +13,27 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   bool isIncome = true;
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _customCategoryController = TextEditingController();
   int? selectedCategoryId;
   DateTime selectedDate = DateTime.now();
   bool isSubmitting = false;
 
   bool isLoadingKategori = false;
   List<Map<String, dynamic>> kategoriList = [];
+  bool isCustomCategory = false;
 
   @override
   void initState() {
     super.initState();
     _loadKategori();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _descriptionController.dispose();
+    _customCategoryController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadKategori() async {
@@ -81,10 +91,38 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
+  Future<int?> _createCustomCategory() async {
+    if (_customCategoryController.text.trim().isEmpty) return null;
+
+    try {
+      final api = ApiService();
+      await api.loadToken();
+
+      // Asumsi ada method createKategori di ApiService
+      // Sesuaikan dengan API endpoint Anda
+      final response = await api.createKategori(
+        _customCategoryController.text.trim(),
+        isIncome ? 'pemasukan' : 'pengeluaran',
+      );
+
+      print("Create kategori response: ${response.statusCode}");
+      print(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> jsonData = jsonDecode(response.body);
+        return jsonData['data']['id']; // Sesuaikan dengan struktur response API
+      }
+    } catch (e) {
+      print("Create kategori error: $e");
+    }
+    return null;
+  }
+
   void _submitTransaction() async {
     if (_amountController.text.isEmpty ||
         _descriptionController.text.isEmpty ||
-        selectedCategoryId == null) {
+        (selectedCategoryId == null && !isCustomCategory) ||
+        (isCustomCategory && _customCategoryController.text.trim().isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lengkapi semua data terlebih dahulu.')),
       );
@@ -94,11 +132,25 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => isSubmitting = true);
 
     try {
+      int? categoryId = selectedCategoryId;
+
+      // Jika menggunakan kategori custom, buat kategori baru terlebih dahulu
+      if (isCustomCategory) {
+        categoryId = await _createCustomCategory();
+        if (categoryId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal membuat kategori baru.')),
+          );
+          setState(() => isSubmitting = false);
+          return;
+        }
+      }
+
       final api = ApiService();
       await api.loadToken();
 
       final response = await api.createTransaksi(
-        selectedCategoryId!,
+        categoryId!,
         int.parse(_amountController.text),
         _descriptionController.text,
         DateFormat('yyyy-MM-dd').format(selectedDate),
@@ -176,6 +228,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         // Kategori
                         _buildDropdownKategori(),
 
+                        // Custom Category Field (muncul jika isCustomCategory = true)
+                        if (isCustomCategory) ...[
+                          SizedBox(height: 20),
+                          TextField(
+                            controller: _customCategoryController,
+                            decoration: InputDecoration(
+                              labelText: 'Nama Kategori Baru',
+                              prefixIcon: Icon(Icons.category_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF00BFA5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        SizedBox(height: 20),
+
                         // Nominal
                         TextField(
                           controller: _amountController,
@@ -248,6 +323,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             setState(() {
               isIncome = value;
               selectedCategoryId = null;
+              isCustomCategory = false;
+              _customCategoryController.clear();
             });
             _loadKategori();
           }
@@ -307,8 +384,62 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       );
     }
 
-    if (kategoriList.isEmpty) {
-      return Text('Kategori tidak tersedia.');
+    if (kategoriList.isEmpty && !isCustomCategory) {
+      return Column(
+        children: [
+          Text('Kategori tidak tersedia.'),
+          SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                isCustomCategory = true;
+              });
+            },
+            child: Text('Buat Kategori Baru'),
+          ),
+          SizedBox(height: 20),
+        ],
+      );
+    }
+
+    // Buat list dropdown items dengan opsi "Tambah Kategori Baru"
+    List<DropdownMenuItem<String>> dropdownItems = [];
+
+    // Tambahkan kategori yang sudah ada
+    dropdownItems.addAll(
+      kategoriList.map((kategori) {
+        return DropdownMenuItem<String>(
+          value: 'existing_${kategori['id']}',
+          child: Text(kategori['nama_kategori']),
+        );
+      }),
+    );
+
+    // Tambahkan opsi "Tambah Kategori Baru"
+    dropdownItems.add(
+      DropdownMenuItem<String>(
+        value: 'add_new',
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 16, color: Color(0xFF00BFA5)),
+            SizedBox(width: 8),
+            Text(
+              'Tambah Kategori Baru',
+              style: TextStyle(
+                color: Color(0xFF00BFA5),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    String? currentValue;
+    if (isCustomCategory) {
+      currentValue = 'add_new';
+    } else if (selectedCategoryId != null) {
+      currentValue = 'existing_$selectedCategoryId';
     }
 
     return Container(
@@ -320,19 +451,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
       child: Material(
         color: Colors.transparent,
-        child: DropdownButtonFormField<int>(
+        child: DropdownButtonFormField<String>(
           isExpanded: true,
-          value: selectedCategoryId,
-          items:
-              kategoriList.map((kategori) {
-                return DropdownMenuItem<int>(
-                  value: kategori['id'],
-                  child: Text(kategori['nama_kategori']),
-                );
-              }).toList(),
+          value: currentValue,
+          items: dropdownItems,
           onChanged: (value) {
             setState(() {
-              selectedCategoryId = value;
+              if (value == 'add_new') {
+                isCustomCategory = true;
+                selectedCategoryId = null;
+              } else if (value != null && value.startsWith('existing_')) {
+                isCustomCategory = false;
+                selectedCategoryId = int.parse(value.substring(9));
+                _customCategoryController.clear();
+              }
             });
           },
           decoration: InputDecoration(

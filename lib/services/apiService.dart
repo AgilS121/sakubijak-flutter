@@ -516,4 +516,96 @@ class ApiService {
     );
     return response;
   }
+
+  Future<http.Response> getAnggaran() async {
+    await loadToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/anggaran'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+    );
+
+    print('Get Anggaran Response: ${response.statusCode} - ${response.body}');
+    return response;
+  }
+
+  // Method untuk membuat anggaran baru
+  Future<http.Response> createAnggaran(Map<String, dynamic> data) async {
+    await loadToken();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/anggaran'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: jsonEncode(data),
+    );
+
+    print(
+      'Create Anggaran Response: ${response.statusCode} - ${response.body}',
+    );
+    return response;
+  }
+
+  // Method untuk mengupdate anggaran
+  Future<http.Response> updateAnggaran(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    await loadToken();
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/anggaran/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+      body: jsonEncode(data),
+    );
+
+    print(
+      'Update Anggaran Response: ${response.statusCode} - ${response.body}',
+    );
+    return response;
+  }
+
+  // Method untuk mendapatkan detail anggaran
+  Future<http.Response> getAnggaranDetail(String id) async {
+    await loadToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/anggaran/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+    );
+
+    print(
+      'Get Anggaran Detail Response: ${response.statusCode} - ${response.body}',
+    );
+    return response;
+  }
+
+  // Method untuk menghapus anggaran
+  Future<http.Response> deleteAnggaran(String id) async {
+    await loadToken();
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/anggaran/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      },
+    );
+
+    print(
+      'Delete Anggaran Response: ${response.statusCode} - ${response.body}',
+    );
+    return response;
+  }
 }
