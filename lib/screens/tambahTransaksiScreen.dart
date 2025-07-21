@@ -257,12 +257,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
                             labelText: 'Nominal',
-                            prefixIcon: Icon(Icons.attach_money),
+                            prefixText: 'Rp ',
+                            prefixStyle: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
+
                         SizedBox(height: 20),
 
                         // Deskripsi

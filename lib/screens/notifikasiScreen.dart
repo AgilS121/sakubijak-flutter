@@ -24,35 +24,151 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
     });
 
     try {
-      final response = await _notifikasiService.getNotifikasi();
+      // Mengambil data anggaran dari API
+      final response = await _notifikasiService.getAnggaran();
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final anggaranList = List<Map<String, dynamic>>.from(
+          data['data'] ?? [],
+        );
+
+        // Filter dan convert data anggaran menjadi notifikasi
+        final filteredNotifikasi = _filterAndConvertAnggaran(anggaranList);
+
         setState(() {
-          _notifikasi = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _notifikasi = filteredNotifikasi;
           _isLoading = false;
         });
       } else {
-        print('Error loading notifikasi: ${response.statusCode}');
+        print('Error loading anggaran: ${response.statusCode}');
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      print('Error loading notifikasi: $e');
+      print('Error loading anggaran: $e');
       setState(() => _isLoading = false);
     }
   }
 
+  List<Map<String, dynamic>> _filterAndConvertAnggaran(
+    List<Map<String, dynamic>> anggaranList,
+  ) {
+    final now = DateTime.now();
+    final h3Before = now.subtract(Duration(days: 3));
+    final h7After = now.add(
+      Duration(days: 7),
+    ); // Contoh H+7, bisa diubah sesuai kebutuhan
+
+    List<Map<String, dynamic>> notifikasiList = [];
+
+    for (var anggaran in anggaranList) {
+      try {
+        final createdAtStr = anggaran['created_at'] as String?;
+        if (createdAtStr == null) continue;
+
+        final createdAt = DateTime.parse(createdAtStr);
+
+        // Filter berdasarkan rentang H-3 sampai H+7
+        if (createdAt.isAfter(h3Before) && createdAt.isBefore(h7After)) {
+          // Hitung selisih hari dari hari ini
+          final daysDifference = createdAt.difference(now).inDays;
+
+          // Tentukan prioritas dan tipe berdasarkan selisih hari
+          String priority;
+          String type;
+          String title;
+          String message;
+
+          if (daysDifference < -1) {
+            priority = 'high';
+            type = 'anggaran_terlambat';
+            title = 'Anggaran Sudah Lewat';
+            message =
+                'Anggaran ${anggaran['kategori']?['nama_kategori'] ?? 'Unknown'} sudah lewat ${daysDifference.abs()} hari';
+          } else if (daysDifference == -1) {
+            priority = 'high';
+            type = 'anggaran_kemarin';
+            title = 'Anggaran Kemarin';
+            message =
+                'Anggaran ${anggaran['kategori']?['nama_kategori'] ?? 'Unknown'} dibuat kemarin';
+          } else if (daysDifference == 0) {
+            priority = 'high';
+            type = 'anggaran_hari_ini';
+            title = 'Anggaran Hari Ini';
+            message =
+                'Anggaran ${anggaran['kategori']?['nama_kategori'] ?? 'Unknown'} dibuat hari ini';
+          } else if (daysDifference <= 3) {
+            priority = 'medium';
+            type = 'anggaran_segera';
+            title = 'Anggaran Baru';
+            message =
+                'Anggaran ${anggaran['kategori']?['nama_kategori'] ?? 'Unknown'} dibuat $daysDifference hari lagi';
+          } else {
+            priority = 'low';
+            type = 'anggaran_minggu_ini';
+            title = 'Anggaran Mendatang';
+            message =
+                'Anggaran ${anggaran['kategori']?['nama_kategori'] ?? 'Unknown'} dibuat $daysDifference hari lagi';
+          }
+
+          // Format tanggal untuk ditampilkan
+          final formattedDate =
+              '${createdAt.day.toString().padLeft(2, '0')}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.year}';
+
+          notifikasiList.add({
+            'id': anggaran['id'],
+            'title': title,
+            'message': message,
+            'jumlah': anggaran['batas_pengeluaran'],
+            'tanggal': formattedDate,
+            'priority': priority,
+            'type': type,
+            'kategori': anggaran['kategori']?['nama_kategori'] ?? 'Unknown',
+            'tahun': anggaran['tahun'],
+            'bulan': anggaran['bulan'],
+            'created_at': createdAtStr,
+          });
+        }
+      } catch (e) {
+        print('Error parsing anggaran item: $e');
+        continue;
+      }
+    }
+
+    // Sort berdasarkan prioritas dan tanggal
+    notifikasiList.sort((a, b) {
+      // Priority order: high > medium > low
+      const priorityOrder = {'high': 0, 'medium': 1, 'low': 2};
+      final priorityComparison = (priorityOrder[a['priority']] ?? 3).compareTo(
+        priorityOrder[b['priority']] ?? 3,
+      );
+
+      if (priorityComparison != 0) return priorityComparison;
+
+      // Sort by date (newest first)
+      final dateA = DateTime.parse(a['created_at']);
+      final dateB = DateTime.parse(b['created_at']);
+      return dateB.compareTo(dateA);
+    });
+
+    return notifikasiList;
+  }
+
   Future<void> _markAsRead(int id) async {
     try {
-      final response = await _notifikasiService.markAsRead(id);
-      if (response.statusCode == 200) {
-        _loadNotifikasi(); // Refresh data
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tagihan ditandai sebagai sudah dibayar')),
-        );
-      }
+      // Untuk anggaran, kita bisa membuat endpoint khusus atau menggunakan update
+      // Sementara ini kita refresh data saja
+      _loadNotifikasi();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Anggaran telah ditandai sebagai telah dilihat'),
+        ),
+      );
     } catch (e) {
       print('Error marking as read: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menandai sebagai sudah dilihat')),
+      );
     }
   }
 
@@ -71,16 +187,18 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
 
   IconData _getTypeIcon(String type) {
     switch (type) {
-      case 'tagihan_terlambat':
+      case 'anggaran_terlambat':
         return Icons.warning;
-      case 'tagihan_hari_ini':
+      case 'anggaran_kemarin':
+        return Icons.history;
+      case 'anggaran_hari_ini':
         return Icons.today;
-      case 'tagihan_segera':
+      case 'anggaran_segera':
         return Icons.schedule;
-      case 'tagihan_minggu_ini':
+      case 'anggaran_minggu_ini':
         return Icons.calendar_today;
       default:
-        return Icons.notifications;
+        return Icons.account_balance_wallet;
     }
   }
 
@@ -100,11 +218,29 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
         );
   }
 
+  String _getMonthName(int month) {
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return months[month - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Notifikasi'),
+        title: Text('Notifikasi Anggaran'),
         backgroundColor: Color(0xFF00BFA5),
         foregroundColor: Colors.white,
         actions: [
@@ -128,13 +264,13 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      Icons.notifications_none,
+                                      Icons.account_balance_wallet_outlined,
                                       size: 64,
                                       color: Colors.grey[400],
                                     ),
                                     SizedBox(height: 16),
                                     Text(
-                                      'Tidak ada notifikasi',
+                                      'Tidak ada notifikasi anggaran',
                                       style: TextStyle(
                                         color: Colors.grey[600],
                                         fontSize: 18,
@@ -142,11 +278,12 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                                     ),
                                     SizedBox(height: 8),
                                     Text(
-                                      'Semua tagihan Anda up to date!',
+                                      'Semua anggaran Anda dalam rentang waktu yang ditentukan!',
                                       style: TextStyle(
                                         color: Colors.grey[400],
                                         fontSize: 14,
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
                                   ],
                                 ),
@@ -200,7 +337,7 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                                   ),
                                 ),
                                 title: Text(
-                                  notif['title'] ?? 'Notifikasi',
+                                  notif['title'] ?? 'Notifikasi Anggaran',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -272,24 +409,70 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text(notif['title'] ?? 'Detail Notifikasi'),
+            title: Text(notif['title'] ?? 'Detail Notifikasi Anggaran'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(notif['message'] ?? '', style: TextStyle(fontSize: 16)),
                 SizedBox(height: 12),
-                Text(
-                  'Jumlah: Rp ${_formatCurrency(notif['jumlah'])}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: _getPriorityColor(notif['priority'] ?? 'low'),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Kategori:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(notif['kategori'] ?? '-'),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Periode:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '${_getMonthName(notif['bulan'] ?? 1)} ${notif['tahun'] ?? 2025}',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Batas Pengeluaran:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Rp ${_formatCurrency(notif['jumlah'])}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _getPriorityColor(
+                                notif['priority'] ?? 'low',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 12),
                 Text(
-                  'Tanggal: ${notif['tanggal'] ?? ''}',
+                  'Dibuat: ${notif['tanggal'] ?? ''}',
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
               ],
@@ -309,7 +492,7 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                     backgroundColor: Colors.green,
                   ),
                   child: Text(
-                    'Tandai Lunas',
+                    'Tandai Sudah Dilihat',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -324,7 +507,9 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
       builder:
           (context) => AlertDialog(
             title: Text('Konfirmasi'),
-            content: Text('Apakah Anda yakin tagihan ini sudah dibayar?'),
+            content: Text(
+              'Apakah Anda yakin sudah melihat notifikasi anggaran ini?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -337,7 +522,7 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: Text(
-                  'Ya, Sudah Dibayar',
+                  'Ya, Sudah Dilihat',
                   style: TextStyle(color: Colors.white),
                 ),
               ),

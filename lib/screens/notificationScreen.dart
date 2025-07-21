@@ -14,7 +14,7 @@ class NotificationScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Notifikasi',
+          'Notifikasi 1',
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
