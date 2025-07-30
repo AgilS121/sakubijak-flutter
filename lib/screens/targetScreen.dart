@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sakubijak/screens/tambahtabungan.dart';
 import 'package:sakubijak/services/apiService.dart';
 
 class TargetScreen extends StatefulWidget {
@@ -9,8 +10,9 @@ class TargetScreen extends StatefulWidget {
 }
 
 class _TargetScreenState extends State<TargetScreen> {
-  final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _nominalController = TextEditingController();
+  final TextEditingController _judulController = TextEditingController();
+  final TextEditingController _targetUangController = TextEditingController();
+  final TextEditingController _uangAwalController = TextEditingController();
   final TextEditingController _deskripsiController = TextEditingController();
   final TextEditingController _dateController = TextEditingController();
 
@@ -26,6 +28,9 @@ class _TargetScreenState extends State<TargetScreen> {
   void initState() {
     super.initState();
     _dateController.text = _formatDate(_selectedDate);
+    // Set nilai awal untuk uang terkumpul
+    _uangAwalController.text = 'Rp 0';
+
     // Tambahkan delay untuk memastikan widget sudah ter-render
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
@@ -160,6 +165,12 @@ class _TargetScreenState extends State<TargetScreen> {
         );
   }
 
+  double _parseCurrency(String text) {
+    // Menghapus "Rp", spasi, dan titik dari teks
+    final cleanText = text.replaceAll(RegExp(r'[Rp\s\.]'), '');
+    return double.tryParse(cleanText) ?? 0.0;
+  }
+
   Future<void> _selectDate() async {
     try {
       final DateTime? picked = await showDatePicker(
@@ -194,24 +205,34 @@ class _TargetScreenState extends State<TargetScreen> {
   }
 
   Future<void> _saveTarget() async {
-    if (_targetController.text.trim().isEmpty) {
-      _showSnackBar('Nama target tidak boleh kosong');
+    // Validasi judul tujuan
+    if (_judulController.text.trim().isEmpty) {
+      _showSnackBar('Judul tujuan tidak boleh kosong');
       return;
     }
 
-    if (_nominalController.text.trim().isEmpty) {
-      _showSnackBar('Nominal target tidak boleh kosong');
+    // Validasi target uang
+    if (_targetUangController.text.trim().isEmpty) {
+      _showSnackBar('Target uang tidak boleh kosong');
       return;
     }
 
-    final nominalText = _nominalController.text.replaceAll(
-      RegExp(r'[^\d]'),
-      '',
-    );
-    final nominal = int.tryParse(nominalText);
+    final targetUang = _parseCurrency(_targetUangController.text);
+    if (targetUang <= 0) {
+      _showSnackBar('Target uang harus lebih dari 0');
+      return;
+    }
 
-    if (nominal == null || nominal <= 0) {
-      _showSnackBar('Nominal target harus berupa angka yang valid');
+    // Validasi uang awal (opsional, default 0)
+    final uangAwal = _parseCurrency(_uangAwalController.text);
+    if (uangAwal < 0) {
+      _showSnackBar('Uang awal tidak boleh negatif');
+      return;
+    }
+
+    // Validasi uang awal tidak boleh lebih dari target
+    if (uangAwal > targetUang) {
+      _showSnackBar('Uang awal tidak boleh lebih dari target');
       return;
     }
 
@@ -224,17 +245,23 @@ class _TargetScreenState extends State<TargetScreen> {
       await api.loadToken();
 
       final response = await api.createTujuan(
-        _targetController.text.trim(),
-        nominal,
-        0, // uang terkumpul awal = 0
+        _judulController.text.trim(),
+        targetUang.toInt(),
+        uangAwal.toInt(), // Menggunakan uang awal yang diinput user
         '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        _showSnackBar('Target berhasil ditambahkan!', isSuccess: true);
+        _showSnackBar(
+          'Tujuan finansial berhasil ditambahkan!',
+          isSuccess: true,
+        );
         await _loadData(); // Refresh data target & saldo
-        _targetController.clear();
-        _nominalController.clear();
+
+        // Reset form
+        _judulController.clear();
+        _targetUangController.clear();
+        _uangAwalController.text = 'Rp 0';
         _deskripsiController.clear();
         _dateController.text = _formatDate(
           DateTime.now().add(Duration(days: 30)),
@@ -242,7 +269,7 @@ class _TargetScreenState extends State<TargetScreen> {
         _selectedDate = DateTime.now().add(Duration(days: 30));
       } else {
         final errorData = jsonDecode(response.body);
-        String errorMessage = 'Gagal menambahkan target';
+        String errorMessage = 'Gagal menambahkan tujuan finansial';
 
         if (errorData['message'] != null) {
           errorMessage = errorData['message'];
@@ -254,7 +281,7 @@ class _TargetScreenState extends State<TargetScreen> {
       }
     } catch (e) {
       print('Error saving target: $e');
-      _showSnackBar('Terjadi kesalahan saat menyimpan target');
+      _showSnackBar('Terjadi kesalahan saat menyimpan tujuan finansial');
     } finally {
       if (mounted) {
         setState(() {
@@ -283,17 +310,33 @@ class _TargetScreenState extends State<TargetScreen> {
     VoidCallback? onTap,
     bool readOnly = false,
     List<TextInputFormatter>? inputFormatters,
+    bool isRequired = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            color: Color(0xFF00BFA5),
-            fontWeight: FontWeight.w500,
-          ),
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFF00BFA5),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (isRequired) ...[
+              SizedBox(width: 4),
+              Text(
+                '*',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
         ),
         SizedBox(height: 8),
         Container(
@@ -334,6 +377,19 @@ class _TargetScreenState extends State<TargetScreen> {
     );
   }
 
+  void _showTambahTabunganDialog(Map<String, dynamic> target) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => TambahTabunganDialog(
+            tujuan: target,
+            onSuccess: () {
+              _loadData(); // Refresh data setelah berhasil
+            },
+          ),
+    );
+  }
+
   Widget _buildExistingTargets() {
     if (_existingTargets.isEmpty) {
       return SizedBox.shrink();
@@ -343,7 +399,7 @@ class _TargetScreenState extends State<TargetScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Target Keuangan Aktif',
+          'Tujuan Finansial Aktif',
           style: TextStyle(
             fontSize: 16,
             color: Color(0xFF00BFA5),
@@ -352,7 +408,7 @@ class _TargetScreenState extends State<TargetScreen> {
         ),
         SizedBox(height: 10),
         Container(
-          height: 120,
+          height: 180,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _existingTargets.length,
@@ -364,35 +420,58 @@ class _TargetScreenState extends State<TargetScreen> {
                   double.tryParse(target['uang_terkumpul'].toString()) ?? 0.0;
               final progress =
                   targetUang > 0 ? (uangTerkumpul / targetUang) : 0.0;
+              final isCompleted = progress >= 1.0;
 
               return Container(
                 width: 200,
                 margin: EdgeInsets.only(right: 15),
                 padding: EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  color: Color(0xFFF0F8F0),
+                  color: isCompleted ? Color(0xFFE8F5E8) : Color(0xFFF0F8F0),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Color(0xFF00BFA5).withOpacity(0.3)),
+                  border: Border.all(
+                    color:
+                        isCompleted
+                            ? Color(0xFF4CAF50).withOpacity(0.5)
+                            : Color(0xFF00BFA5).withOpacity(0.3),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      target['judul'] ?? 'Target',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            target['judul'] ?? 'Tujuan',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCompleted)
+                          Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF4CAF50),
+                            size: 20,
+                          ),
+                      ],
                     ),
-                    SizedBox(height: 5),
+                    SizedBox(height: 8),
                     Text(
-                      'Rp ${_formatCurrency(targetUang)}',
+                      'Target: Rp ${_formatCurrency(targetUang)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    Text(
+                      'Terkumpul: Rp ${_formatCurrency(uangTerkumpul)}',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF00BFA5),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color:
+                            isCompleted ? Color(0xFF4CAF50) : Color(0xFF00BFA5),
                       ),
                     ),
                     SizedBox(height: 8),
@@ -400,14 +479,51 @@ class _TargetScreenState extends State<TargetScreen> {
                       value: progress.clamp(0.0, 1.0),
                       backgroundColor: Colors.grey[300],
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFF00BFA5),
+                        isCompleted ? Color(0xFF4CAF50) : Color(0xFF00BFA5),
                       ),
                     ),
                     SizedBox(height: 5),
                     Text(
-                      '${(progress * 100).toStringAsFixed(1)}% tercapai',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      isCompleted
+                          ? 'Target tercapai!'
+                          : '${(progress * 100).toStringAsFixed(1)}% tercapai',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color:
+                            isCompleted ? Color(0xFF4CAF50) : Colors.grey[600],
+                        fontWeight:
+                            isCompleted ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     ),
+                    SizedBox(height: 10),
+                    if (!isCompleted)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 32, // Fixed height untuk konsistensi
+                        child: ElevatedButton(
+                          onPressed: () => _showTambahTabunganDialog(target),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF00BFA5),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                            shadowColor: Color(0xFF00BFA5).withOpacity(0.3),
+                          ),
+                          child: Text(
+                            'Tambah Tabungan',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               );
@@ -457,10 +573,18 @@ class _TargetScreenState extends State<TargetScreen> {
           SizedBox(height: 16),
           ElevatedButton(
             onPressed: _loadData,
-            child: Text('Coba Lagi'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Color(0xFF00BFA5),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+            child: Text(
+              'Coba Lagi',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -475,11 +599,19 @@ class _TargetScreenState extends State<TargetScreen> {
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Icon(Icons.arrow_back, color: Colors.white, size: 24),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(Icons.arrow_back, color: Colors.white, size: 24),
+            ),
           ),
           SizedBox(width: 15),
           Text(
-            'Target Keuangan',
+            'Tujuan Finansial',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -494,7 +626,7 @@ class _TargetScreenState extends State<TargetScreen> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Icon(Icons.notifications_outlined, color: Colors.white),
+            child: Icon(Icons.savings_outlined, color: Colors.white),
           ),
         ],
       ),
@@ -579,7 +711,7 @@ class _TargetScreenState extends State<TargetScreen> {
                       SizedBox(height: 20),
                       _buildExistingTargets(),
                       Text(
-                        'Tambah Target Baru',
+                        'Tambah Tujuan Finansial Baru',
                         style: TextStyle(
                           fontSize: 18,
                           color: Color(0xFF00BFA5),
@@ -588,24 +720,18 @@ class _TargetScreenState extends State<TargetScreen> {
                       ),
                       SizedBox(height: 20),
                       _buildTargetField(
-                        'Tanggal Target',
-                        'Pilih tanggal target',
-                        controller: _dateController,
-                        readOnly: true,
-                        onTap: _selectDate,
+                        'Judul Tujuan',
+                        'Contoh: Beli Laptop, Liburan ke Bali',
+                        controller: _judulController,
+                        isRequired: true,
                       ),
                       SizedBox(height: 15),
                       _buildTargetField(
-                        'Target',
-                        'Masukkan nama target',
-                        controller: _targetController,
-                      ),
-                      SizedBox(height: 15),
-                      _buildTargetField(
-                        'Nominal',
+                        'Target Uang',
                         'Rp 0',
-                        controller: _nominalController,
+                        controller: _targetUangController,
                         keyboardType: TextInputType.number,
+                        isRequired: true,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                           TextInputFormatter.withFunction((oldValue, newValue) {
@@ -622,6 +748,43 @@ class _TargetScreenState extends State<TargetScreen> {
                             );
                           }),
                         ],
+                      ),
+                      SizedBox(height: 15),
+                      _buildTargetField(
+                        'Uang Awal Terkumpul',
+                        'Rp 0',
+                        controller: _uangAwalController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          TextInputFormatter.withFunction((oldValue, newValue) {
+                            if (newValue.text.isEmpty) {
+                              return TextEditingValue(
+                                text: 'Rp 0',
+                                selection: TextSelection.collapsed(offset: 3),
+                              );
+                            }
+                            final number = int.tryParse(newValue.text) ?? 0;
+                            final formatted = _formatCurrency(
+                              number.toDouble(),
+                            );
+                            return TextEditingValue(
+                              text: 'Rp $formatted',
+                              selection: TextSelection.collapsed(
+                                offset: formatted.length + 3,
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                      SizedBox(height: 15),
+                      _buildTargetField(
+                        'Tanggal Target',
+                        'Pilih tanggal target pencapaian',
+                        controller: _dateController,
+                        readOnly: true,
+                        onTap: _selectDate,
+                        isRequired: true,
                       ),
                       SizedBox(height: 15),
                       _buildDescriptionField(),
@@ -654,7 +817,8 @@ class _TargetScreenState extends State<TargetScreen> {
             controller: _deskripsiController,
             maxLines: 4,
             decoration: InputDecoration(
-              hintText: 'Masukkan deskripsi target...',
+              hintText:
+                  'Masukkan deskripsi atau alasan tujuan finansial ini...',
               hintStyle: TextStyle(color: Colors.grey[400]),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -680,39 +844,45 @@ class _TargetScreenState extends State<TargetScreen> {
   }
 
   Widget _buildSubmitButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _saveTarget,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Color(0xFF00BFA5),
-        minimumSize: Size(double.infinity, 50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        elevation: 0,
+    return Container(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _saveTarget,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Color(0xFF00BFA5),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Color(0xFF00BFA5).withOpacity(0.6),
+          disabledForegroundColor: Colors.white.withOpacity(0.8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+          ),
+          elevation: 3,
+          shadowColor: Color(0xFF00BFA5).withOpacity(0.3),
+        ),
+        child:
+            _isLoading
+                ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    strokeWidth: 2,
+                  ),
+                )
+                : Text(
+                  'Tambah Tujuan Finansial',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
       ),
-      child:
-          _isLoading
-              ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  strokeWidth: 2,
-                ),
-              )
-              : Text(
-                'Tambah Target',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
     );
   }
 
   @override
   void dispose() {
-    _targetController.dispose();
-    _nominalController.dispose();
+    _judulController.dispose();
+    _targetUangController.dispose();
+    _uangAwalController.dispose();
     _deskripsiController.dispose();
     _dateController.dispose();
     super.dispose();
