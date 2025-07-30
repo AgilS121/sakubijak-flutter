@@ -608,4 +608,26 @@ class ApiService {
     );
     return response;
   }
+
+  Future<http.Response> tambahTabungan(int idTujuan, int jumlahTabungan) async {
+    final headers = await _getHeaders();
+    return http.post(
+      Uri.parse('$baseUrl/tujuan-keuangan/$idTujuan/tambah-tabungan'),
+      headers: headers,
+      body: jsonEncode({'jumlah_tabungan': jumlahTabungan}),
+    );
+  }
+
+  // Method alternatif jika endpoint berbeda
+  Future<http.Response> tambahTabunganTujuan(
+    int idTujuan,
+    int jumlahBaru,
+  ) async {
+    final headers = await _getHeaders();
+    return http.put(
+      Uri.parse('$baseUrl/tujuan-keuangan/$idTujuan/tabungan'),
+      headers: headers,
+      body: jsonEncode({'tambah_uang': jumlahBaru}),
+    );
+  }
 }
