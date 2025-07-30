@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:sakubijak/services/apiService.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BudgetPage extends StatefulWidget {
   @override
@@ -14,10 +15,44 @@ class _BudgetPageState extends State<BudgetPage> {
   int _currentMonth = DateTime.now().month;
   int _currentYear = DateTime.now().year;
 
+  // Set untuk menyimpan ID anggaran yang sudah digunakan
+  Set<String> _usedAnggaranIds = {};
+
   @override
   void initState() {
     super.initState();
+    _loadUsedAnggaran();
     _loadData();
+  }
+
+  // Menyimpan anggaran yang sudah digunakan ke SharedPreferences
+  Future<void> _saveUsedAnggaran(String anggaranId) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> usedList = prefs.getStringList('used_anggaran_ids') ?? [];
+    if (!usedList.contains(anggaranId)) {
+      usedList.add(anggaranId);
+      await prefs.setStringList('used_anggaran_ids', usedList);
+    }
+  }
+
+  // Memuat anggaran yang sudah digunakan dari SharedPreferences
+  Future<void> _loadUsedAnggaran() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> usedList = prefs.getStringList('used_anggaran_ids') ?? [];
+    setState(() {
+      _usedAnggaranIds = usedList.toSet();
+    });
+  }
+
+  // Menghapus anggaran dari daftar yang sudah digunakan
+  Future<void> _removeUsedAnggaran(String anggaranId) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> usedList = prefs.getStringList('used_anggaran_ids') ?? [];
+    usedList.remove(anggaranId);
+    await prefs.setStringList('used_anggaran_ids', usedList);
+    setState(() {
+      _usedAnggaranIds.remove(anggaranId);
+    });
   }
 
   Future<void> _loadData() async {
@@ -340,6 +375,9 @@ class _BudgetPageState extends State<BudgetPage> {
       final response = await api.deleteAnggaran(id);
 
       if (response.statusCode == 200) {
+        // Juga hapus dari daftar anggaran yang sudah digunakan
+        await _removeUsedAnggaran(id);
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Anggaran berhasil dihapus')));
@@ -357,6 +395,129 @@ class _BudgetPageState extends State<BudgetPage> {
     }
   }
 
+  Future<void> _useAnggaran(
+    String anggaranId,
+    double amount,
+    String kategoriNama,
+    String kategoriId,
+  ) async {
+    try {
+      final api = ApiService();
+      await api.loadToken();
+
+      // Membuat transaksi pengeluaran otomatis menggunakan kategori pengeluaran yang benar
+      final response = await api.createTransaksi(
+        int.parse(kategoriId), // Menggunakan ID kategori pengeluaran yang benar
+        amount.toInt(),
+        'Penggunaan anggaran: $kategoriNama',
+        DateTime.now().toIso8601String().split('T')[0], // Format YYYY-MM-DD
+      );
+
+      if (response.statusCode == 201) {
+        // Simpan ke SharedPreferences agar persisten
+        await _saveUsedAnggaran(anggaranId);
+
+        setState(() {
+          _usedAnggaranIds.add(anggaranId);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Anggaran telah digunakan dan saldo dikurangi Rp ${_formatCurrency(amount)}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        print('API Response: ${response.statusCode} - ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menggunakan anggaran: ${response.body}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error using anggaran: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showUseAnggaranConfirmation(Map<String, dynamic> anggaran) {
+    final kategori = anggaran['kategori'] as Map<String, dynamic>? ?? {};
+    final namaKategori = kategori['nama_kategori'] ?? 'Kategori';
+    final kategoriId = kategori['id']?.toString() ?? '';
+    final batasPengeluaran =
+        double.tryParse(anggaran['batas_pengeluaran'].toString()) ?? 0.0;
+    final anggaranId = anggaran['id'].toString();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Gunakan Anggaran'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Apakah Anda yakin ingin menggunakan anggaran ini?'),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kategori: $namaKategori',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text('Jumlah: Rp ${_formatCurrency(batasPengeluaran)}'),
+                    SizedBox(height: 8),
+                    Text(
+                      'Saldo Anda akan dikurangi sebesar jumlah di atas',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _useAnggaran(
+                  anggaranId,
+                  batasPengeluaran,
+                  namaKategori,
+                  kategoriId,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text('Gunakan', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildAnggaranCard(Map<String, dynamic> anggaran) {
     final kategori = anggaran['kategori'] as Map<String, dynamic>? ?? {};
     final namaKategori = kategori['nama_kategori'] ?? 'Kategori';
@@ -364,6 +525,9 @@ class _BudgetPageState extends State<BudgetPage> {
         double.tryParse(anggaran['batas_pengeluaran'].toString()) ?? 0.0;
     final bulan = anggaran['bulan'] ?? 1;
     final tahun = anggaran['tahun'] ?? DateTime.now().year;
+    final anggaranId = anggaran['id'].toString();
+
+    final isUsed = _usedAnggaranIds.contains(anggaranId);
 
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -380,12 +544,12 @@ class _BudgetPageState extends State<BudgetPage> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.red.shade100,
+                    color: isUsed ? Colors.grey.shade200 : Colors.red.shade100,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Icon(
                     Icons.account_balance_wallet,
-                    color: Colors.red.shade700,
+                    color: isUsed ? Colors.grey.shade600 : Colors.red.shade700,
                     size: 24,
                   ),
                 ),
@@ -399,6 +563,7 @@ class _BudgetPageState extends State<BudgetPage> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: isUsed ? Colors.grey.shade700 : Colors.black,
                         ),
                       ),
                       Text(
@@ -408,14 +573,40 @@ class _BudgetPageState extends State<BudgetPage> {
                     ],
                   ),
                 ),
+                // Checkbox untuk menggunakan anggaran
+                Checkbox(
+                  value: isUsed,
+                  onChanged:
+                      isUsed
+                          ? null
+                          : (bool? value) {
+                            if (value == true) {
+                              _showUseAnggaranConfirmation(anggaran);
+                            }
+                          },
+                  activeColor: Colors.red,
+                ),
                 PopupMenuButton(
                   onSelected: (value) {
                     if (value == 'delete') {
                       _showDeleteConfirmation(anggaran['id'].toString());
+                    } else if (value == 'reset' && isUsed) {
+                      _showResetConfirmation(anggaran['id'].toString());
                     }
                   },
                   itemBuilder:
                       (context) => [
+                        if (isUsed)
+                          PopupMenuItem(
+                            value: 'reset',
+                            child: Row(
+                              children: [
+                                Icon(Icons.refresh, color: Colors.orange),
+                                SizedBox(width: 8),
+                                Text('Reset Status'),
+                              ],
+                            ),
+                          ),
                         PopupMenuItem(
                           value: 'delete',
                           child: Row(
@@ -434,31 +625,101 @@ class _BudgetPageState extends State<BudgetPage> {
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: isUsed ? Colors.grey.shade100 : Colors.red.shade50,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade200),
+                border: Border.all(
+                  color: isUsed ? Colors.grey.shade300 : Colors.red.shade200,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Batas Pengeluaran',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Batas Pengeluaran',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                      if (isUsed)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade600,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'TERPAKAI',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   Text(
                     'Rp ${_formatCurrency(batasPengeluaran)}',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.red.shade700,
+                      color:
+                          isUsed ? Colors.grey.shade700 : Colors.red.shade700,
                     ),
                   ),
+                  if (isUsed)
+                    Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Anggaran telah digunakan dan saldo sudah dikurangi',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showResetConfirmation(String id) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Reset Status Anggaran'),
+          content: Text(
+            'Apakah Anda yakin ingin mereset status anggaran ini? Status akan kembali menjadi belum digunakan.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _removeUsedAnggaran(id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Status anggaran berhasil direset')),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: Text('Reset', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -513,6 +774,12 @@ class _BudgetPageState extends State<BudgetPage> {
           Text(
             'Atur batas pengeluaran untuk setiap kategori',
             style: TextStyle(color: Colors.white70, fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Centang checkbox untuk menggunakan anggaran',
+            style: TextStyle(color: Colors.white70, fontSize: 14),
             textAlign: TextAlign.center,
           ),
         ],
