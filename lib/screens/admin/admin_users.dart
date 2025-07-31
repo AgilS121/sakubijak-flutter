@@ -75,14 +75,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 _buildDetailRow('Nama', user['nama']),
                 _buildDetailRow('Email', user['email']),
                 _buildDetailRow('Tanggal Daftar', user['created_at']),
-                _buildDetailRow(
-                  'Total Transaksi',
-                  '${user['total_transaksi']} transaksi',
-                ),
-                _buildDetailRow(
-                  'Saldo',
-                  'Rp ${_formatCurrency(user['saldo'])}',
-                ),
+                // _buildDetailRow(
+                //   'Total Transaksi',
+                //   '${user['total_transaksi']} transaksi',
+                // ),
+                // _buildDetailRow(
+                //   'Saldo',
+                //   'Rp ${_formatCurrency(user['saldo'])}',
+                // ),
                 _buildDetailRow('Status', user['status']),
               ],
             ),
@@ -313,28 +313,28 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                             ),
 
                                             // Right stats
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
-                                              children: [
-                                                Text(
-                                                  'Rp ${_formatCurrency(user['saldo'])}',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(0xFF00BFA5),
-                                                  ),
-                                                ),
-                                                SizedBox(height: 2),
-                                                Text(
-                                                  '${user['total_transaksi']} transaksi',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                            // Column(
+                                            //   crossAxisAlignment:
+                                            //       CrossAxisAlignment.end,
+                                            //   children: [
+                                            //     Text(
+                                            //       'Rp ${_formatCurrency(user['saldo'])}',
+                                            //       style: TextStyle(
+                                            //         fontSize: 14,
+                                            //         fontWeight: FontWeight.bold,
+                                            //         color: Color(0xFF00BFA5),
+                                            //       ),
+                                            //     ),
+                                            //     SizedBox(height: 2),
+                                            //     Text(
+                                            //       '${user['total_transaksi']} transaksi',
+                                            //       style: TextStyle(
+                                            //         fontSize: 12,
+                                            //         color: Colors.grey[600],
+                                            //       ),
+                                            //     ),
+                                            //   ],
+                                            // ),
 
                                             // Detail button
                                             SizedBox(width: 10),
