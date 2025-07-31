@@ -295,12 +295,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text(
-                                  'Target Bulanan',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
-                                    decoration: TextDecoration.underline,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Color(0xFF00BFA5),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  child: Text(
+                                    'Target Bulanan',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF00BFA5),
+                                      fontWeight: FontWeight.bold,
+                                      // decoration: TextDecoration.underline, // removed underline
+                                    ),
                                   ),
                                 ),
                                 Text(
