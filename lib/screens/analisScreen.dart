@@ -514,7 +514,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                         children: [
                           SizedBox(width: 15),
                           Text(
-                            'Analisis',
+                            'Analisis Keuangan',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
