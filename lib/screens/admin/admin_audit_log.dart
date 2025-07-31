@@ -70,7 +70,7 @@ class _SimpleAuditLogTestState extends State<SimpleAuditLogTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Audit Log Test'),
+        title: Text('Audit Log'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
