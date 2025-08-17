@@ -15,7 +15,7 @@ class AnalysisScreen extends StatefulWidget {
 }
 
 class _AnalysisScreenState extends State<AnalysisScreen> {
-  final List<String> months = [
+  final List<String> months = const [
     'Januari',
     'Februari',
     'Maret',
@@ -29,10 +29,15 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     'November',
     'Desember',
   ];
+
   String selectedMonth = 'Januari';
-  double totalSaldo = 0;
-  double totalPengeluaran = 0;
-  double totalPemasukan = 0;
+
+  // ===== Ringkasan =====
+  double totalSaldoAllTime = 0; // <-- ALL-TIME saldo
+  double totalPengeluaran = 0; // bulanan
+  double totalPemasukan = 0; // bulanan
+  double totalSaldo = 0; // bulanan (opsional, jika ingin dipakai)
+
   List<WeeklyChartData> chartData = [];
   List<TransactionItem> transactions = [];
   bool isLoading = true;
@@ -52,6 +57,114 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     await fetchAnalysisData(now);
   }
 
+  // =======================
+  //  Parsing Helper
+  // =======================
+  List<TransactionItem> _parseTransactions(dynamic responseData) {
+    List<dynamic> jsonData = [];
+
+    if (responseData is List) {
+      jsonData = responseData;
+    } else if (responseData is Map) {
+      if (responseData.containsKey('data')) {
+        jsonData = responseData['data'] as List<dynamic>;
+      } else if (responseData.containsKey('transactions')) {
+        jsonData = responseData['transactions'] as List<dynamic>;
+      } else {
+        debugPrint('Unknown response structure: $responseData');
+      }
+    }
+
+    final List<TransactionItem> transactionList = [];
+    for (var item in jsonData) {
+      try {
+        String jenis = '';
+        String kategori = '';
+
+        if (item['kategori'] != null) {
+          if (item['kategori'] is Map) {
+            jenis = item['kategori']['jenis']?.toString() ?? '';
+            kategori = item['kategori']['nama_kategori']?.toString() ?? '';
+          } else if (item['kategori'] is String) {
+            kategori = item['kategori'];
+            if (item.containsKey('jenis')) {
+              jenis = item['jenis']?.toString() ?? '';
+            }
+          }
+        }
+
+        if (jenis.isEmpty && item.containsKey('jenis')) {
+          jenis = item['jenis']?.toString() ?? '';
+        }
+
+        if (jenis.isEmpty) {
+          final amount =
+              double.tryParse(item['jumlah']?.toString() ?? '0') ?? 0.0;
+          jenis = amount > 0 ? 'pemasukan' : 'pengeluaran';
+        }
+
+        transactionList.add(
+          TransactionItem(
+            id:
+                item['id'] is int
+                    ? item['id']
+                    : int.tryParse(item['id']?.toString() ?? '0') ?? 0,
+            jumlah: double.tryParse(item['jumlah']?.toString() ?? '0') ?? 0.0,
+            deskripsi: item['deskripsi']?.toString() ?? '',
+            tanggal: item['tanggal']?.toString() ?? '',
+            kategori: kategori,
+            jenis: jenis.toLowerCase(),
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error parsing transaction item: $e');
+        debugPrint('Item: $item');
+      }
+    }
+    return transactionList;
+  }
+
+  // =======================
+  //  Ambil Saldo ALL-TIME
+  // =======================
+  Future<double> _fetchSaldoAllTime() async {
+    final api = ApiService();
+    await api.loadToken();
+
+    // Rentang luas agar mencakup semua data
+    const mulai = '1900-01-01';
+    const sampai = '9999-12-31';
+
+    try {
+      final resp = await api.getLaporan(mulai, sampai);
+      if (resp.statusCode == 200) {
+        final decoded = jsonDecode(resp.body);
+        final allTx = _parseTransactions(decoded);
+
+        double pemasukan = 0.0;
+        double pengeluaran = 0.0;
+
+        for (final t in allTx) {
+          if (t.jenis == 'pemasukan') {
+            pemasukan += t.jumlah.abs();
+          } else if (t.jenis == 'pengeluaran') {
+            pengeluaran += t.jumlah.abs();
+          }
+        }
+        return pemasukan - pengeluaran;
+      } else {
+        debugPrint('All-time status: ${resp.statusCode}');
+        debugPrint('All-time body: ${resp.body}');
+      }
+    } catch (e) {
+      debugPrint('Error fetch saldo all time: $e');
+    }
+    return 0.0;
+  }
+
+  // =======================
+  //  Ambil Data Bulanan
+  // =======================
   Future<void> fetchAnalysisData(DateTime monthDate) async {
     setState(() {
       isLoading = true;
@@ -69,113 +182,30 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
     try {
       final response = await api.getLaporan(mulai, sampai);
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      debugPrint('Response status: ${response.statusCode}');
+      debugPrint('Response body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        List<dynamic> jsonData = [];
+        final decoded = jsonDecode(response.body);
+        final transactionList = _parseTransactions(decoded);
 
-        // Handle different response structures
-        if (responseData is List) {
-          jsonData = responseData;
-        } else if (responseData is Map) {
-          if (responseData.containsKey('data')) {
-            jsonData = responseData['data'] as List<dynamic>;
-          } else if (responseData.containsKey('transactions')) {
-            jsonData = responseData['transactions'] as List<dynamic>;
-          } else {
-            print('Unknown response structure: $responseData');
-            jsonData = [];
-          }
-        }
-
-        print('Parsed ${jsonData.length} transactions');
-
-        // Parse transactions with better error handling
-        List<TransactionItem> transactionList = [];
-
-        for (var item in jsonData) {
-          try {
-            // Handle different possible structures
-            String jenis = '';
-            String kategori = '';
-
-            if (item['kategori'] != null) {
-              if (item['kategori'] is Map) {
-                jenis = item['kategori']['jenis']?.toString() ?? '';
-                kategori = item['kategori']['nama_kategori']?.toString() ?? '';
-              } else if (item['kategori'] is String) {
-                kategori = item['kategori'];
-                // Try to determine jenis from other fields
-                if (item.containsKey('jenis')) {
-                  jenis = item['jenis']?.toString() ?? '';
-                }
-              }
-            }
-
-            // If jenis is still empty, try to get it directly from item
-            if (jenis.isEmpty && item.containsKey('jenis')) {
-              jenis = item['jenis']?.toString() ?? '';
-            }
-
-            // If still empty, try to infer from amount or other indicators
-            if (jenis.isEmpty) {
-              double amount =
-                  double.tryParse(item['jumlah']?.toString() ?? '0') ?? 0.0;
-              if (amount > 0) {
-                jenis = 'pemasukan';
-              } else {
-                jenis = 'pengeluaran';
-              }
-            }
-
-            TransactionItem transaction = TransactionItem(
-              id:
-                  item['id'] is int
-                      ? item['id']
-                      : int.tryParse(item['id']?.toString() ?? '0') ?? 0,
-              jumlah: double.tryParse(item['jumlah']?.toString() ?? '0') ?? 0.0,
-              deskripsi: item['deskripsi']?.toString() ?? '',
-              tanggal: item['tanggal']?.toString() ?? '',
-              kategori: kategori,
-              jenis: jenis.toLowerCase(),
-            );
-
-            transactionList.add(transaction);
-            print(
-              'Added transaction: ${transaction.deskripsi}, amount: ${transaction.jumlah}, jenis: ${transaction.jenis}',
-            );
-          } catch (e) {
-            print('Error parsing transaction item: $e');
-            print('Item: $item');
-          }
-        }
-
-        // Calculate totals
+        // Hitung total pemasukan & pengeluaran bulanan
         double pemasukan = 0.0;
         double pengeluaran = 0.0;
-
-        for (var transaction in transactionList) {
-          if (transaction.jenis == 'pemasukan') {
-            pemasukan += transaction.jumlah.abs();
-          } else if (transaction.jenis == 'pengeluaran') {
-            pengeluaran += transaction.jumlah.abs();
+        for (var t in transactionList) {
+          if (t.jenis == 'pemasukan') {
+            pemasukan += t.jumlah.abs();
+          } else if (t.jenis == 'pengeluaran') {
+            pengeluaran += t.jumlah.abs();
           }
         }
 
-        print('Total pemasukan: $pemasukan');
-        print('Total pengeluaran: $pengeluaran');
-
-        // Group by weeks for chart
-        Map<String, WeeklyData> weeklyData = {};
-
-        // Get the number of days in the month
+        // ---- Chart Mingguan ----
+        final Map<String, WeeklyData> weeklyData = {};
         final daysInMonth =
             DateTime(monthDate.year, monthDate.month + 1, 0).day;
         final numberOfWeeks = (daysInMonth / 7).ceil();
 
-        // Initialize weeks
         for (int i = 1; i <= numberOfWeeks; i++) {
           weeklyData['Minggu $i'] = WeeklyData(
             pemasukan: 0.0,
@@ -183,86 +213,61 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           );
         }
 
-        // Process transactions for weekly data
-        for (var transaction in transactionList) {
+        for (final t in transactionList) {
           try {
             DateTime date;
-
-            // Try different date formats
             try {
-              date = DateTime.parse(transaction.tanggal);
-            } catch (e) {
-              // Try alternative format like dd-MM-yyyy
+              date = DateTime.parse(t.tanggal);
+            } catch (_) {
               try {
-                date = DateFormat('dd-MM-yyyy').parse(transaction.tanggal);
-              } catch (e2) {
-                // Try another format like yyyy/MM/dd
-                try {
-                  date = DateFormat('yyyy/MM/dd').parse(transaction.tanggal);
-                } catch (e3) {
-                  print('Could not parse date: ${transaction.tanggal}');
-                  continue;
-                }
+                date = DateFormat('dd-MM-yyyy').parse(t.tanggal);
+              } catch (_) {
+                date = DateFormat('yyyy/MM/dd').parse(t.tanggal);
               }
             }
-
-            // Calculate week number more accurately
             int weekOfMonth = ((date.day - 1) / 7).floor() + 1;
-            // Ensure we don't exceed the number of weeks
-            if (weekOfMonth > numberOfWeeks) {
-              weekOfMonth = numberOfWeeks;
-            }
+            if (weekOfMonth > numberOfWeeks) weekOfMonth = numberOfWeeks;
 
-            String weekKey = 'Minggu $weekOfMonth';
-
-            if (weeklyData.containsKey(weekKey)) {
-              if (transaction.jenis == 'pemasukan') {
-                weeklyData[weekKey]!.pemasukan += transaction.jumlah.abs();
-              } else if (transaction.jenis == 'pengeluaran') {
-                weeklyData[weekKey]!.pengeluaran += transaction.jumlah.abs();
-              }
+            final key = 'Minggu $weekOfMonth';
+            if (t.jenis == 'pemasukan') {
+              weeklyData[key]!.pemasukan += t.jumlah.abs();
+            } else if (t.jenis == 'pengeluaran') {
+              weeklyData[key]!.pengeluaran += t.jumlah.abs();
             }
           } catch (e) {
-            print(
-              'Error processing transaction date: ${transaction.tanggal}, error: $e',
-            );
+            debugPrint('Error processing date ${t.tanggal}: $e');
           }
         }
 
-        // Convert to chart data
-        List<WeeklyChartData> chartDataList = [];
-        for (int i = 1; i <= numberOfWeeks; i++) {
-          String weekKey = 'Minggu $i';
-          WeeklyData data = weeklyData[weekKey]!;
-          chartDataList.add(
-            WeeklyChartData(
-              label: weekKey,
-              pemasukan: data.pemasukan,
-              pengeluaran: data.pengeluaran,
-            ),
+        final chartDataList = List<WeeklyChartData>.generate(numberOfWeeks, (
+          i,
+        ) {
+          final key = 'Minggu ${i + 1}';
+          final w = weeklyData[key]!;
+          return WeeklyChartData(
+            label: key,
+            pemasukan: w.pemasukan,
+            pengeluaran: w.pengeluaran,
           );
-        }
+        });
 
-        print('Chart data: ${chartDataList.length} weeks');
-        for (var week in chartDataList) {
-          print(
-            '${week.label}: Pemasukan=${week.pemasukan}, Pengeluaran=${week.pengeluaran}',
-          );
-        }
+        // ---- Ambil SALDO ALL-TIME ----
+        final saldoAll = await _fetchSaldoAllTime();
 
         setState(() {
           transactions = transactionList;
-          totalPemasukan = pemasukan;
-          totalPengeluaran = pengeluaran;
-          totalSaldo = pemasukan - pengeluaran;
+          totalPemasukan = pemasukan; // bulanan
+          totalPengeluaran = pengeluaran; // bulanan
+          totalSaldo = pemasukan - pengeluaran; // bulanan (opsional)
+          totalSaldoAllTime = saldoAll; // ALL-TIME
           chartData = chartDataList;
         });
       } else {
-        print("Gagal mengambil data laporan: ${response.statusCode}");
-        print("Response body: ${response.body}");
+        debugPrint("Gagal mengambil data laporan: ${response.statusCode}");
+        debugPrint("Response body: ${response.body}");
       }
     } catch (e) {
-      print("Error fetching laporan: $e");
+      debugPrint("Error fetching laporan: $e");
     }
 
     setState(() {
@@ -274,7 +279,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
@@ -283,8 +288,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           child: Column(
             children: [
               Container(
-                padding: EdgeInsets.all(16),
-                child: Text(
+                padding: const EdgeInsets.all(16),
+                child: const Text(
                   'Pilih Bulan',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
@@ -298,14 +303,16 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       title: Text(month),
                       trailing:
                           selectedMonth == month
-                              ? Icon(Icons.check, color: Color(0xFF00BFA5))
+                              ? const Icon(
+                                Icons.check,
+                                color: Color(0xFF00BFA5),
+                              )
                               : null,
                       onTap: () {
                         Navigator.pop(context);
                         setState(() {
                           selectedMonth = month;
                         });
-                        // Use current year for selected month
                         final now = DateTime.now();
                         final selectedDate = DateTime(now.year, index + 1, 1);
                         fetchAnalysisData(selectedDate);
@@ -339,12 +346,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         context: context,
         barrierDismissible: false,
         builder:
-            (context) => AlertDialog(
+            (context) => const AlertDialog(
               content: Row(
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(width: 20),
-                  Text('Mengunduh laporan $selectedMonth...'),
+                  Text('Mengunduh laporan ...'),
                 ],
               ),
             ),
@@ -352,42 +359,33 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
       final response = await api.eksporData('pdf', mulai, sampai);
 
-      // Tutup loading dialog
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
 
-      print('Export response status: ${response.statusCode}');
-      print('Export response body: ${response.body}');
+      debugPrint('Export status: ${response.statusCode}');
+      debugPrint('Export body: ${response.body}');
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
-
         if (json['status'] == true) {
           String? fileUrl = json['file_url'];
-
           if (fileUrl != null) {
-            print('Opening URL: $fileUrl');
-
-            // Buka URL di browser
             final launched = await launchUrl(
               Uri.parse(fileUrl),
-              mode:
-                  LaunchMode
-                      .externalApplication, // Atau LaunchMode.platformDefault
+              mode: LaunchMode.externalApplication,
             );
-
             if (launched) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Laporan $selectedMonth berhasil dibuka'),
                   backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+                const SnackBar(
                   content: Text('Gagal membuka browser'),
                   backgroundColor: Colors.red,
                 ),
@@ -395,7 +393,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
+              const SnackBar(
                 content: Text('URL file tidak ditemukan'),
                 backgroundColor: Colors.orange,
               ),
@@ -411,13 +409,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         }
       } else if (response.statusCode == 401) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Sesi berakhir. Silakan login ulang.'),
             backgroundColor: Colors.red,
           ),
         );
-        // Redirect ke login
-        // Navigator.pushReplacementNamed(context, '/login');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -427,12 +423,10 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         );
       }
     } catch (e) {
-      print('Download error: $e');
-
+      debugPrint('Download error: $e');
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -442,28 +436,27 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  // Helper method untuk menampilkan URL jika gagal auto-launch
   void _showUrlDialog(BuildContext context, String url) {
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text('Download Manual'),
+            title: const Text('Download Manual'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Silakan copy URL berikut dan buka di browser:'),
-                SizedBox(height: 10),
+                const Text('Silakan copy URL berikut dan buka di browser:'),
+                const SizedBox(height: 10),
                 Container(
-                  padding: EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: SelectableText(
                     url,
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                    style: const TextStyle(fontSize: 12, color: Colors.blue),
                   ),
                 ),
               ],
@@ -471,7 +464,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('OK'),
+                child: const Text('OK'),
               ),
             ],
           ),
@@ -500,20 +493,22 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF00BFA5),
+      backgroundColor: const Color(0xFF00BFA5),
       body: SafeArea(
         child:
             isLoading
-                ? Center(child: CircularProgressIndicator(color: Colors.white))
+                ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                )
                 : Column(
                   children: [
-                    // Header
+                    // ===== Header =====
                     Padding(
-                      padding: EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(20),
                       child: Row(
                         children: [
-                          SizedBox(width: 15),
-                          Text(
+                          const SizedBox(width: 15),
+                          const Text(
                             'Analisis Keuangan',
                             style: TextStyle(
                               color: Colors.white,
@@ -521,7 +516,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Spacer(),
+                          const Spacer(),
                           GestureDetector(
                             onTap: _downloadReport,
                             child: Container(
@@ -531,25 +526,29 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                 color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Icon(Icons.download, color: Colors.white),
+                              child: const Icon(
+                                Icons.download,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    // Summary
+                    // ===== Summary =====
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
+                              // Saldo ALL-TIME
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  const Text(
                                     'Saldo Total',
                                     style: TextStyle(
                                       fontSize: 14,
@@ -557,8 +556,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                     ),
                                   ),
                                   Text(
-                                    'Rp ${_formatCurrency(totalSaldo)}',
-                                    style: TextStyle(
+                                    'Rp ${_formatCurrency(totalSaldoAllTime)}',
+                                    style: const TextStyle(
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
@@ -566,10 +565,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   ),
                                 ],
                               ),
+                              // Pengeluaran Bulan Ini
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(
+                                  const Text(
                                     'Pengeluaran',
                                     style: TextStyle(
                                       fontSize: 14,
@@ -578,7 +578,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   ),
                                   Text(
                                     'Rp ${_formatCurrency(totalPengeluaran)}',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       color: Colors.white,
                                     ),
@@ -587,13 +587,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 10),
+                          const SizedBox(height: 10),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 'Total Pemasukan: Rp ${_formatCurrency(totalPemasukan)}',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.white70,
                                 ),
@@ -603,13 +603,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                         ],
                       ),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                    // Chart Section
+                    // ===== Chart Section =====
                     Expanded(
                       child: Container(
-                        padding: EdgeInsets.all(20),
-                        decoration: BoxDecoration(
+                        padding: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.vertical(
                             top: Radius.circular(30),
@@ -624,7 +624,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                 GestureDetector(
                                   onTap: _showMonthSelector,
                                   child: Container(
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 15,
                                       vertical: 8,
                                     ),
@@ -639,14 +639,14 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                       children: [
                                         Text(
                                           selectedMonth,
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        SizedBox(width: 5),
-                                        Icon(
+                                        const SizedBox(width: 5),
+                                        const Icon(
                                           Icons.keyboard_arrow_down,
                                           size: 20,
                                         ),
@@ -656,18 +656,17 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                 ),
                               ],
                             ),
-                            SizedBox(height: 20),
+                            const SizedBox(height: 20),
 
-                            // Chart Title and Legend
-                            Text(
-                              'Pemasukan vs Pengeluaran Mingguan',
+                            const Text(
+                              'Ringkasan Pemasukan dan Pengeluaran Mingguan',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
                             ),
-                            SizedBox(height: 10),
+                            const SizedBox(height: 10),
 
                             // Legend
                             Row(
@@ -681,7 +680,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
-                                SizedBox(width: 5),
+                                const SizedBox(width: 5),
                                 Text(
                                   'Pemasukan',
                                   style: TextStyle(
@@ -689,7 +688,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                     color: Colors.grey[600],
                                   ),
                                 ),
-                                SizedBox(width: 20),
+                                const SizedBox(width: 20),
                                 Container(
                                   width: 16,
                                   height: 16,
@@ -698,7 +697,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
-                                SizedBox(width: 5),
+                                const SizedBox(width: 5),
                                 Text(
                                   'Pengeluaran',
                                   style: TextStyle(
@@ -708,12 +707,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                 ),
                               ],
                             ),
-                            SizedBox(height: 20),
+                            const SizedBox(height: 20),
 
-                            // Debug info (hapus ini setelah testing)
                             if (transactions.isNotEmpty)
                               Container(
-                                padding: EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: Colors.blue[50],
                                   borderRadius: BorderRadius.circular(8),
@@ -726,9 +724,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   ),
                                 ),
                               ),
-                            SizedBox(height: 10),
+                            const SizedBox(height: 10),
 
-                            // Chart
                             Expanded(
                               child:
                                   chartData.isEmpty
@@ -742,7 +739,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                               size: 48,
                                               color: Colors.grey[400],
                                             ),
-                                            SizedBox(height: 16),
+                                            const SizedBox(height: 16),
                                             Text(
                                               'Tidak ada data untuk bulan ini',
                                               style: TextStyle(
@@ -750,7 +747,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                                 fontSize: 16,
                                               ),
                                             ),
-                                            SizedBox(height: 8),
+                                            const SizedBox(height: 8),
                                             Text(
                                               'Total transaksi: ${transactions.length}',
                                               style: TextStyle(
@@ -762,7 +759,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                         ),
                                       )
                                       : Container(
-                                        padding: EdgeInsets.all(16),
+                                        padding: const EdgeInsets.all(16),
                                         child: CustomPaint(
                                           painter: DoubleBarChartPainter(
                                             chartData,
@@ -773,10 +770,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                       ),
                             ),
 
-                            // Chart Labels
                             if (chartData.isNotEmpty)
                               Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 20),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
                                 child: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceEvenly,
@@ -808,7 +806,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 }
 
-// Transaction Item Model
+// ===== Models =====
 class TransactionItem {
   final int id;
   final double jumlah;
@@ -827,20 +825,16 @@ class TransactionItem {
   });
 }
 
-// Weekly Data Model
 class WeeklyData {
   double pemasukan;
   double pengeluaran;
-
   WeeklyData({required this.pemasukan, required this.pengeluaran});
 }
 
-// Weekly Chart Data Model
 class WeeklyChartData {
   final String label;
   final double pemasukan;
   final double pengeluaran;
-
   WeeklyChartData({
     required this.label,
     required this.pemasukan,
@@ -848,7 +842,7 @@ class WeeklyChartData {
   });
 }
 
-// Improved Double Bar Chart Painter
+// ===== Painter =====
 class DoubleBarChartPainter extends CustomPainter {
   final List<WeeklyChartData> data;
   final String Function(double) formatValue;
@@ -863,78 +857,60 @@ class DoubleBarChartPainter extends CustomPainter {
         Paint()
           ..color = Colors.green
           ..style = PaintingStyle.fill;
-
     final expensePaint =
         Paint()
           ..color = Colors.red
           ..style = PaintingStyle.fill;
-
-    final backgroundPaint =
-        Paint()
-          ..color = Colors.grey[100]!
-          ..style = PaintingStyle.fill;
-
     final gridPaint =
         Paint()
           ..color = Colors.grey[300]!
           ..strokeWidth = 1
           ..style = PaintingStyle.stroke;
 
-    // Calculate chart dimensions
     final chartArea = Rect.fromLTWH(
-      40, // Left margin for Y-axis labels
-      20, // Top margin
-      size.width - 60, // Chart width
-      size.height - 40, // Chart height
+      40, // left padding for Y labels
+      20, // top
+      size.width - 60,
+      size.height - 40,
     );
 
-    // Find max value for scaling
     double maxValue = 0;
     for (var item in data) {
       maxValue = math.max(maxValue, math.max(item.pemasukan, item.pengeluaran));
     }
-
-    // Add some padding to max value
     maxValue = maxValue * 1.1;
-    if (maxValue == 0) maxValue = 100000; // Default if no data
+    if (maxValue == 0) maxValue = 100000;
 
-    // Draw grid lines
+    // grid + Y labels
     for (int i = 0; i <= 5; i++) {
-      double y = chartArea.top + (chartArea.height / 5) * i;
+      final y = chartArea.top + (chartArea.height / 5) * i;
       canvas.drawLine(
         Offset(chartArea.left, y),
         Offset(chartArea.right, y),
         gridPaint,
       );
 
-      // Draw Y-axis labels
-      double value = maxValue * (1 - i / 5);
+      final value = maxValue * (1 - i / 5);
       _drawYAxisLabel(canvas, formatValue(value), chartArea.left - 5, y);
     }
 
-    // Calculate bar dimensions
     final groupWidth = chartArea.width / data.length;
     final barWidth = groupWidth * 0.3;
     final barSpacing = groupWidth * 0.05;
 
-    // Draw bars
     for (int i = 0; i < data.length; i++) {
       final item = data[i];
       final centerX = chartArea.left + (i + 0.5) * groupWidth;
 
-      // Calculate bar heights
       final incomeHeight = (item.pemasukan / maxValue) * chartArea.height;
       final expenseHeight = (item.pengeluaran / maxValue) * chartArea.height;
 
-      // Income bar (left)
       final incomeRect = Rect.fromLTWH(
         centerX - barWidth - barSpacing / 2,
         chartArea.bottom - incomeHeight,
         barWidth,
         incomeHeight,
       );
-
-      // Expense bar (right)
       final expenseRect = Rect.fromLTWH(
         centerX + barSpacing / 2,
         chartArea.bottom - expenseHeight,
@@ -942,18 +918,15 @@ class DoubleBarChartPainter extends CustomPainter {
         expenseHeight,
       );
 
-      // Draw bars with rounded corners
       canvas.drawRRect(
-        RRect.fromRectAndRadius(incomeRect, Radius.circular(4)),
+        RRect.fromRectAndRadius(incomeRect, const Radius.circular(4)),
         incomePaint,
       );
-
       canvas.drawRRect(
-        RRect.fromRectAndRadius(expenseRect, Radius.circular(4)),
+        RRect.fromRectAndRadius(expenseRect, const Radius.circular(4)),
         expensePaint,
       );
 
-      // Draw value labels on top of bars
       if (item.pemasukan > 0) {
         _drawValueLabel(
           canvas,
@@ -963,7 +936,6 @@ class DoubleBarChartPainter extends CustomPainter {
           Colors.green,
         );
       }
-
       if (item.pengeluaran > 0) {
         _drawValueLabel(
           canvas,
@@ -977,19 +949,15 @@ class DoubleBarChartPainter extends CustomPainter {
   }
 
   void _drawYAxisLabel(Canvas canvas, String text, double x, double y) {
-    final textPainter = TextPainter(
+    final tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(fontSize: 10, color: Colors.grey[600]),
       ),
       textDirection: ui.TextDirection.ltr,
     );
-
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(x - textPainter.width, y - textPainter.height / 2),
-    );
+    tp.layout();
+    tp.paint(canvas, Offset(x - tp.width, y - tp.height / 2));
   }
 
   void _drawValueLabel(
@@ -999,7 +967,7 @@ class DoubleBarChartPainter extends CustomPainter {
     double y,
     Color color,
   ) {
-    final textPainter = TextPainter(
+    final tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
@@ -1010,12 +978,8 @@ class DoubleBarChartPainter extends CustomPainter {
       ),
       textDirection: ui.TextDirection.ltr,
     );
-
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(x - textPainter.width / 2, y - textPainter.height),
-    );
+    tp.layout();
+    tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height));
   }
 
   @override

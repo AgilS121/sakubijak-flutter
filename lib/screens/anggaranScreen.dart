@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:sakubijak/services/apiService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,10 +68,6 @@ class _BudgetPageState extends State<BudgetPage> {
       // Kemudian load anggaran
       await _loadAnggaran(api);
 
-      print(
-        'Kategori pengeluaran loaded: ${_kategoriPengeluaran.length} items',
-      ); // Debug log
-
       setState(() => _isLoading = false);
     } catch (e) {
       print('Error loading budget data: $e');
@@ -105,7 +102,6 @@ class _BudgetPageState extends State<BudgetPage> {
       final response = await api.getKategori();
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('Raw kategori data: $data'); // Debug log
 
         List kategori = [];
         if (data is Map<String, dynamic>) {
@@ -116,8 +112,6 @@ class _BudgetPageState extends State<BudgetPage> {
           kategori = data;
         }
 
-        print('Parsed kategori: $kategori'); // Debug log
-
         final kategoriPengeluaran =
             kategori
                 .where(
@@ -127,10 +121,6 @@ class _BudgetPageState extends State<BudgetPage> {
                       e['jenis'] == 'pengeluaran',
                 )
                 .toList();
-
-        print(
-          'Filtered kategori pengeluaran: $kategoriPengeluaran',
-        ); // Debug log
 
         setState(() {
           _kategoriPengeluaran = kategoriPengeluaran;
@@ -171,6 +161,9 @@ class _BudgetPageState extends State<BudgetPage> {
     return months[month];
   }
 
+  // ==========================
+  // ADD DIALOG (with tanggal)
+  // ==========================
   void _showAddAnggaranDialog() {
     if (_kategoriPengeluaran.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -181,8 +174,24 @@ class _BudgetPageState extends State<BudgetPage> {
 
     String? selectedKategoriId;
     final TextEditingController batasController = TextEditingController();
+    final TextEditingController tanggalController = TextEditingController(
+      text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+    );
     int selectedMonth = _currentMonth;
     int selectedYear = _currentYear;
+
+    Future<void> pickDate() async {
+      final now = DateTime.now();
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: now,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
+      if (picked != null) {
+        tanggalController.text = DateFormat('yyyy-MM-dd').format(picked);
+      }
+    }
 
     showDialog(
       context: context,
@@ -212,9 +221,6 @@ class _BudgetPageState extends State<BudgetPage> {
                               ]
                               : _kategoriPengeluaran
                                   .map<DropdownMenuItem<String>>((kategori) {
-                                    print(
-                                      'Building dropdown item for: $kategori',
-                                    ); // Debug log
                                     return DropdownMenuItem<String>(
                                       value: kategori['id']?.toString(),
                                       child: Text(
@@ -242,6 +248,20 @@ class _BudgetPageState extends State<BudgetPage> {
                         prefixText: 'Rp ',
                       ),
                       keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    // Tanggal Anggaran (string)
+                    TextFormField(
+                      controller: tanggalController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: 'Tanggal Anggaran',
+                        border: OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.calendar_today),
+                          onPressed: pickDate,
+                        ),
+                      ),
                     ),
                     SizedBox(height: 16),
                     Row(
@@ -308,12 +328,14 @@ class _BudgetPageState extends State<BudgetPage> {
                         selectedKategoriId!,
                         double.tryParse(
                               batasController.text
-                                  .replaceAll('.', '')
-                                  .replaceAll(',', ''),
+                                      .replaceAll('.', '')
+                                      .replaceAll(',', '') ??
+                                  '',
                             ) ??
                             0,
                         selectedMonth,
                         selectedYear,
+                        tanggalController.text, // <-- kirim tanggal
                       );
                       Navigator.pop(context);
                     } else {
@@ -337,6 +359,7 @@ class _BudgetPageState extends State<BudgetPage> {
     double batasPengeluaran,
     int bulan,
     int tahun,
+    String tanggalAnggaran,
   ) async {
     final api = ApiService();
     await api.loadToken();
@@ -347,6 +370,7 @@ class _BudgetPageState extends State<BudgetPage> {
         'batas_pengeluaran': batasPengeluaran,
         'bulan': bulan,
         'tahun': tahun,
+        'tanggal_anggaran': tanggalAnggaran, // <-- kirim tanggal
       });
 
       if (response.statusCode == 201) {
@@ -375,9 +399,7 @@ class _BudgetPageState extends State<BudgetPage> {
       final response = await api.deleteAnggaran(id);
 
       if (response.statusCode == 200) {
-        // Juga hapus dari daftar anggaran yang sudah digunakan
         await _removeUsedAnggaran(id);
-
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Anggaran berhasil dihapus')));
@@ -405,18 +427,15 @@ class _BudgetPageState extends State<BudgetPage> {
       final api = ApiService();
       await api.loadToken();
 
-      // Membuat transaksi pengeluaran otomatis menggunakan kategori pengeluaran yang benar
       final response = await api.createTransaksi(
-        int.parse(kategoriId), // Menggunakan ID kategori pengeluaran yang benar
+        int.parse(kategoriId),
         amount.toInt(),
         'Penggunaan anggaran: $kategoriNama',
-        DateTime.now().toIso8601String().split('T')[0], // Format YYYY-MM-DD
+        DateTime.now().toIso8601String().split('T')[0],
       );
 
       if (response.statusCode == 201) {
-        // Simpan ke SharedPreferences agar persisten
         await _saveUsedAnggaran(anggaranId);
-
         setState(() {
           _usedAnggaranIds.add(anggaranId);
         });
@@ -444,6 +463,215 @@ class _BudgetPageState extends State<BudgetPage> {
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
+  }
+
+  // ==========================
+  // EDIT DIALOG (with tanggal)
+  // ==========================
+  void _showEditAnggaranDialog(Map<String, dynamic> anggaran) {
+    final kategori = anggaran['kategori'] as Map<String, dynamic>? ?? {};
+    String? selectedKategoriId = kategori['id']?.toString();
+
+    final TextEditingController batasController = TextEditingController(
+      text: (anggaran['batas_pengeluaran'] ?? '').toString(),
+    );
+
+    final String initialTanggal =
+        (anggaran['tanggal_anggaran'] ??
+                DateFormat('yyyy-MM-dd').format(DateTime.now()))
+            .toString();
+
+    final TextEditingController tanggalController = TextEditingController(
+      text: initialTanggal,
+    );
+
+    int selectedMonth = (anggaran['bulan'] ?? _currentMonth) as int;
+    int selectedYear = (anggaran['tahun'] ?? _currentYear) as int;
+
+    Future<void> pickDate() async {
+      DateTime base;
+      try {
+        base = DateTime.parse(tanggalController.text);
+      } catch (_) {
+        base = DateTime.now();
+      }
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: base,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
+      if (picked != null) {
+        tanggalController.text = DateFormat('yyyy-MM-dd').format(picked);
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Ubah Anggaran'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Kategori Pengeluaran',
+                        border: OutlineInputBorder(),
+                      ),
+                      value: selectedKategoriId,
+                      hint: Text('Pilih Kategori'),
+                      items:
+                          _kategoriPengeluaran.map<DropdownMenuItem<String>>((
+                            kategori,
+                          ) {
+                            return DropdownMenuItem<String>(
+                              value: kategori['id']?.toString(),
+                              child: Text(
+                                kategori['nama_kategori']?.toString() ??
+                                    'Kategori',
+                              ),
+                            );
+                          }).toList(),
+                      onChanged: (String? value) {
+                        setDialogState(() {
+                          selectedKategoriId = value;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 16),
+                    TextFormField(
+                      controller: batasController,
+                      decoration: InputDecoration(
+                        labelText: 'Batas Pengeluaran (Rp)',
+                        border: OutlineInputBorder(),
+                        prefixText: 'Rp ',
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    TextFormField(
+                      controller: tanggalController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: 'Tanggal Anggaran',
+                        border: OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.calendar_today),
+                          onPressed: pickDate,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            decoration: InputDecoration(
+                              labelText: 'Bulan',
+                              border: OutlineInputBorder(),
+                            ),
+                            value: selectedMonth,
+                            items: List.generate(12, (index) {
+                              int month = index + 1;
+                              return DropdownMenuItem<int>(
+                                value: month,
+                                child: Text(_getMonthName(month)),
+                              );
+                            }),
+                            onChanged: (int? value) {
+                              setDialogState(() {
+                                selectedMonth = value ?? _currentMonth;
+                              });
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            decoration: InputDecoration(
+                              labelText: 'Tahun',
+                              border: OutlineInputBorder(),
+                            ),
+                            value: selectedYear,
+                            items: List.generate(5, (index) {
+                              int year = DateTime.now().year + index;
+                              return DropdownMenuItem<int>(
+                                value: year,
+                                child: Text(year.toString()),
+                              );
+                            }),
+                            onChanged: (int? value) {
+                              setDialogState(() {
+                                selectedYear = value ?? _currentYear;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final id = anggaran['id'].toString();
+                    final api = ApiService();
+                    await api.loadToken();
+
+                    final payload = {
+                      if (selectedKategoriId != null)
+                        'id_kategori': selectedKategoriId,
+                      'batas_pengeluaran':
+                          double.tryParse(
+                            batasController.text
+                                .replaceAll('.', '')
+                                .replaceAll(',', ''),
+                          ) ??
+                          0,
+                      'bulan': selectedMonth,
+                      'tahun': selectedYear,
+                      'tanggal_anggaran':
+                          tanggalController.text, // <-- update tanggal
+                    };
+
+                    try {
+                      final resp = await api.updateAnggaran(id, payload);
+                      if (resp.statusCode == 200) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Anggaran berhasil diperbarui'),
+                          ),
+                        );
+                        _loadData();
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal memperbarui anggaran')),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                  child: Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showUseAnggaranConfirmation(Map<String, dynamic> anggaran) {
@@ -525,6 +753,7 @@ class _BudgetPageState extends State<BudgetPage> {
         double.tryParse(anggaran['batas_pengeluaran'].toString()) ?? 0.0;
     final bulan = anggaran['bulan'] ?? 1;
     final tahun = anggaran['tahun'] ?? DateTime.now().year;
+    final tanggalAnggaran = (anggaran['tanggal_anggaran'] ?? '-') as String;
     final anggaranId = anggaran['id'].toString();
 
     final isUsed = _usedAnggaranIds.contains(anggaranId);
@@ -570,6 +799,15 @@ class _BudgetPageState extends State<BudgetPage> {
                         '${_getMonthName(bulan)} $tahun',
                         style: TextStyle(color: Colors.grey[600], fontSize: 14),
                       ),
+                      // TAMPILKAN TANGGAL ANGGARAN
+                      if (tanggalAnggaran.isNotEmpty && tanggalAnggaran != '-')
+                        Text(
+                          'Tanggal: $tanggalAnggaran',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -592,10 +830,22 @@ class _BudgetPageState extends State<BudgetPage> {
                       _showDeleteConfirmation(anggaran['id'].toString());
                     } else if (value == 'reset' && isUsed) {
                       _showResetConfirmation(anggaran['id'].toString());
+                    } else if (value == 'edit') {
+                      _showEditAnggaranDialog(anggaran);
                     }
                   },
                   itemBuilder:
                       (context) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Text('Ubah'),
+                            ],
+                          ),
+                        ),
                         if (isUsed)
                           PopupMenuItem(
                             value: 'reset',

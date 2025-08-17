@@ -22,7 +22,7 @@ class CustomBottomNavBar extends StatelessWidget {
       onTap: onTap,
       items: [
         BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
-        BottomNavigationBarItem(icon: Icon(Icons.mail_outline), label: ''),
+        BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
         BottomNavigationBarItem(icon: Icon(Icons.swap_horiz), label: ''),
         BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: ''),
       ],

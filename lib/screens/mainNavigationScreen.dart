@@ -17,8 +17,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
-    AnalysisScreen(),
-    DashboardScreen(),
+    DashboardScreen(), // Dashboard di posisi pertama (index 0)
+    AnalysisScreen(), // Analysis di posisi kedua (index 1)
     BudgetPage(), // Assuming this is the AnalisScreen
     ProfileScreen(),
   ];
