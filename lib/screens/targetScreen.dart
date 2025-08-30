@@ -408,7 +408,7 @@ class _TargetScreenState extends State<TargetScreen> {
         ),
         SizedBox(height: 10),
         Container(
-          height: 180,
+          height: 280, // Diperbesar dari 180 menjadi 280
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _existingTargets.length,
@@ -422,8 +422,24 @@ class _TargetScreenState extends State<TargetScreen> {
                   targetUang > 0 ? (uangTerkumpul / targetUang) : 0.0;
               final isCompleted = progress >= 1.0;
 
+              // Parse tanggal target
+              String tanggalTarget = 'Belum ditentukan';
+              if (target['tanggal_target'] != null) {
+                try {
+                  final DateTime targetDate = DateTime.parse(
+                    target['tanggal_target'],
+                  );
+                  tanggalTarget = _formatDate(targetDate);
+                } catch (e) {
+                  tanggalTarget = target['tanggal_target'].toString();
+                }
+              }
+
+              // Ambil riwayat tabungan
+              List<dynamic> riwayatTabungan = target['riwayat_tabungan'] ?? [];
+
               return Container(
-                width: 200,
+                width: 280, // Diperbesar dari 200 menjadi 280
                 margin: EdgeInsets.only(right: 15),
                 padding: EdgeInsets.all(15),
                 decoration: BoxDecoration(
@@ -461,6 +477,39 @@ class _TargetScreenState extends State<TargetScreen> {
                       ],
                     ),
                     SizedBox(height: 8),
+
+                    // Tanggal Target
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF00BFA5).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 12,
+                            color: Color(0xFF00BFA5),
+                          ),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Target: $tanggalTarget',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF00BFA5),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 8),
+
                     Text(
                       'Target: Rp ${_formatCurrency(targetUang)}',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -496,10 +545,88 @@ class _TargetScreenState extends State<TargetScreen> {
                       ),
                     ),
                     SizedBox(height: 10),
+
+                    // Riwayat Tabungan
+                    if (riwayatTabungan.isNotEmpty) ...[
+                      Text(
+                        'Riwayat Tabungan:',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Container(
+                        height: 60, // Tinggi untuk menampilkan 2-3 item riwayat
+                        child: ListView.builder(
+                          itemCount:
+                              riwayatTabungan.length > 3
+                                  ? 3
+                                  : riwayatTabungan.length,
+                          itemBuilder: (context, idx) {
+                            final riwayat = riwayatTabungan[idx];
+                            final jumlah =
+                                double.tryParse(riwayat['jumlah'].toString()) ??
+                                0.0;
+
+                            String tanggal = '';
+                            if (riwayat['tanggal'] != null) {
+                              try {
+                                final DateTime date = DateTime.parse(
+                                  riwayat['tanggal'],
+                                );
+                                tanggal =
+                                    '${date.day}/${date.month}/${date.year}';
+                              } catch (e) {
+                                tanggal = riwayat['tanggal']
+                                    .toString()
+                                    .substring(0, 10);
+                              }
+                            }
+
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: 2),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.add_circle,
+                                    size: 10,
+                                    color: Color(0xFF00BFA5),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      '$tanggal: +Rp ${_formatCurrency(jumlah)}',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.grey[600],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      if (riwayatTabungan.length > 3)
+                        Text(
+                          '+ ${riwayatTabungan.length - 3} lainnya',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey[500],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      SizedBox(height: 8),
+                    ],
+
                     if (!isCompleted)
                       SizedBox(
                         width: double.infinity,
-                        height: 32, // Fixed height untuk konsistensi
+                        height: 32,
                         child: ElevatedButton(
                           onPressed: () => _showTambahTabunganDialog(target),
                           style: ElevatedButton.styleFrom(

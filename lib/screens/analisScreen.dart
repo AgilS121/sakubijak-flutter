@@ -38,6 +38,10 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   double totalPemasukan = 0; // bulanan
   double totalSaldo = 0; // bulanan (opsional, jika ingin dipakai)
 
+  // ===== TAMBAHAN BARU =====
+  bool resetSaldoBulanan = false; // setting apakah reset saldo tiap bulan
+  double saldoAwalBulan = 0.0; // saldo awal bulan jika tidak reset
+
   List<WeeklyChartData> chartData = [];
   List<TransactionItem> transactions = [];
   bool isLoading = true;
@@ -45,7 +49,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSettings(); // Load setting dari SharedPreferences
     _initializeLocaleAndFetchData();
+  }
+
+  // ===== METHOD BARU UNTUK SETTING =====
+  Future<void> _loadSettings() async {
+    resetSaldoBulanan =
+        await SharedPrefHelper.getBool('reset_saldo_bulanan') ?? false;
+  }
+
+  Future<void> _saveSettings() async {
+    await SharedPrefHelper.setBool('reset_saldo_bulanan', resetSaldoBulanan);
   }
 
   Future<void> _initializeLocaleAndFetchData() async {
@@ -162,8 +177,49 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     return 0.0;
   }
 
+  // ===== METHOD BARU: Ambil Saldo Sampai Bulan Sebelumnya =====
+  Future<double> _fetchSaldoSebelumBulan(DateTime bulanSekarang) async {
+    if (resetSaldoBulanan) return 0.0; // jika reset, kembalikan 0
+
+    final api = ApiService();
+    await api.loadToken();
+
+    // Hitung dari awal sampai hari terakhir bulan sebelumnya
+    const mulai = '1900-01-01';
+    final sampai = DateFormat('yyyy-MM-dd').format(
+      DateTime(
+        bulanSekarang.year,
+        bulanSekarang.month,
+        0,
+      ), // hari terakhir bulan sebelumnya
+    );
+
+    try {
+      final resp = await api.getLaporan(mulai, sampai);
+      if (resp.statusCode == 200) {
+        final decoded = jsonDecode(resp.body);
+        final allTx = _parseTransactions(decoded);
+
+        double pemasukan = 0.0;
+        double pengeluaran = 0.0;
+
+        for (final t in allTx) {
+          if (t.jenis == 'pemasukan') {
+            pemasukan += t.jumlah.abs();
+          } else if (t.jenis == 'pengeluaran') {
+            pengeluaran += t.jumlah.abs();
+          }
+        }
+        return pemasukan - pengeluaran;
+      }
+    } catch (e) {
+      debugPrint('Error fetch saldo sebelum bulan: $e');
+    }
+    return 0.0;
+  }
+
   // =======================
-  //  Ambil Data Bulanan
+  //  Ambil Data Bulanan (DIMODIFIKASI)
   // =======================
   Future<void> fetchAnalysisData(DateTime monthDate) async {
     setState(() {
@@ -251,15 +307,21 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           );
         });
 
-        // ---- Ambil SALDO ALL-TIME ----
+        // ---- MODIFIKASI: Hitung saldo berdasarkan setting ----
+        final saldoSebelum = await _fetchSaldoSebelumBulan(monthDate);
         final saldoAll = await _fetchSaldoAllTime();
 
         setState(() {
           transactions = transactionList;
           totalPemasukan = pemasukan; // bulanan
           totalPengeluaran = pengeluaran; // bulanan
-          totalSaldo = pemasukan - pengeluaran; // bulanan (opsional)
-          totalSaldoAllTime = saldoAll; // ALL-TIME
+          totalSaldo = pemasukan - pengeluaran; // bulanan
+          saldoAwalBulan = saldoSebelum; // saldo sebelum bulan ini
+          // Jika reset bulanan, gunakan saldo bulan ini saja. Jika tidak, gunakan all-time
+          totalSaldoAllTime =
+              resetSaldoBulanan
+                  ? (saldoSebelum + pemasukan - pengeluaran)
+                  : saldoAll;
           chartData = chartDataList;
         });
       } else {
@@ -273,6 +335,76 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     setState(() {
       isLoading = false;
     });
+  }
+
+  // ===== DIALOG SETTING BARU =====
+  void _showSettingDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Pengaturan Saldo'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Pilih cara perhitungan saldo:'),
+                      const SizedBox(height: 10),
+                      RadioListTile<bool>(
+                        title: const Text('Akumulatif dari awal'),
+                        subtitle: const Text(
+                          'Saldo dihitung dari semua transaksi',
+                        ),
+                        value: false,
+                        groupValue: resetSaldoBulanan,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            resetSaldoBulanan = value!;
+                          });
+                        },
+                      ),
+                      RadioListTile<bool>(
+                        title: const Text('Reset setiap bulan'),
+                        subtitle: const Text(
+                          'Saldo dimulai dari 0 setiap bulan',
+                        ),
+                        value: true,
+                        groupValue: resetSaldoBulanan,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            resetSaldoBulanan = value!;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Batal'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _saveSettings();
+                        // Refresh data dengan setting baru
+                        final now = DateTime.now();
+                        final monthIndex = months.indexOf(selectedMonth);
+                        final selectedDate = DateTime(
+                          now.year,
+                          monthIndex + 1,
+                          1,
+                        );
+                        fetchAnalysisData(selectedDate);
+                      },
+                      child: const Text('Simpan'),
+                    ),
+                  ],
+                ),
+          ),
+    );
   }
 
   void _showMonthSelector() {
@@ -502,14 +634,14 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 )
                 : Column(
                   children: [
-                    // ===== Header =====
+                    // ===== Header (DIMODIFIKASI) =====
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Row(
                         children: [
                           const SizedBox(width: 15),
                           const Text(
-                            'Analisis Keuangan',
+                            'Grafik Keuangan',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -517,6 +649,23 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                             ),
                           ),
                           const Spacer(),
+                          // TAMBAHAN: Icon setting
+                          GestureDetector(
+                            onTap: _showSettingDialog,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Icon(
+                                Icons.settings,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
                           GestureDetector(
                             onTap: _downloadReport,
                             child: Container(
@@ -536,7 +685,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       ),
                     ),
 
-                    // ===== Summary =====
+                    // ===== Summary (DIMODIFIKASI) =====
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
@@ -544,13 +693,15 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Saldo ALL-TIME
+                              // Saldo berdasarkan setting
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Saldo Total',
-                                    style: TextStyle(
+                                  Text(
+                                    resetSaldoBulanan
+                                        ? 'Saldo Bulan Ini'
+                                        : 'Saldo Total',
+                                    style: const TextStyle(
                                       fontSize: 14,
                                       color: Colors.white70,
                                     ),
@@ -563,6 +714,15 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                       color: Colors.white,
                                     ),
                                   ),
+                                  // Tampilkan saldo awal bulan jika tidak reset
+                                  if (!resetSaldoBulanan && saldoAwalBulan != 0)
+                                    Text(
+                                      'Saldo awal bulan: Rp ${_formatCurrency(saldoAwalBulan)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white60,
+                                      ),
+                                    ),
                                 ],
                               ),
                               // Pengeluaran Bulan Ini
@@ -842,7 +1002,7 @@ class WeeklyChartData {
   });
 }
 
-// ===== Painter =====
+// ===== Custom Painter for Double Bar Chart =====
 class DoubleBarChartPainter extends CustomPainter {
   final List<WeeklyChartData> data;
   final String Function(double) formatValue;
@@ -874,14 +1034,15 @@ class DoubleBarChartPainter extends CustomPainter {
       size.height - 40,
     );
 
+    // Calculate maximum value for scaling
     double maxValue = 0;
     for (var item in data) {
       maxValue = math.max(maxValue, math.max(item.pemasukan, item.pengeluaran));
     }
-    maxValue = maxValue * 1.1;
-    if (maxValue == 0) maxValue = 100000;
+    maxValue = maxValue * 1.1; // Add 10% padding
+    if (maxValue == 0) maxValue = 100000; // Default minimum
 
-    // grid + Y labels
+    // Draw grid lines and Y labels
     for (int i = 0; i <= 5; i++) {
       final y = chartArea.top + (chartArea.height / 5) * i;
       canvas.drawLine(
@@ -894,6 +1055,7 @@ class DoubleBarChartPainter extends CustomPainter {
       _drawYAxisLabel(canvas, formatValue(value), chartArea.left - 5, y);
     }
 
+    // Draw bars
     final groupWidth = chartArea.width / data.length;
     final barWidth = groupWidth * 0.3;
     final barSpacing = groupWidth * 0.05;
@@ -902,15 +1064,19 @@ class DoubleBarChartPainter extends CustomPainter {
       final item = data[i];
       final centerX = chartArea.left + (i + 0.5) * groupWidth;
 
+      // Calculate bar heights
       final incomeHeight = (item.pemasukan / maxValue) * chartArea.height;
       final expenseHeight = (item.pengeluaran / maxValue) * chartArea.height;
 
+      // Income bar (left side)
       final incomeRect = Rect.fromLTWH(
         centerX - barWidth - barSpacing / 2,
         chartArea.bottom - incomeHeight,
         barWidth,
         incomeHeight,
       );
+
+      // Expense bar (right side)
       final expenseRect = Rect.fromLTWH(
         centerX + barSpacing / 2,
         chartArea.bottom - expenseHeight,
@@ -918,6 +1084,7 @@ class DoubleBarChartPainter extends CustomPainter {
         expenseHeight,
       );
 
+      // Draw bars with rounded corners
       canvas.drawRRect(
         RRect.fromRectAndRadius(incomeRect, const Radius.circular(4)),
         incomePaint,
@@ -927,6 +1094,7 @@ class DoubleBarChartPainter extends CustomPainter {
         expensePaint,
       );
 
+      // Draw value labels on top of bars
       if (item.pemasukan > 0) {
         _drawValueLabel(
           canvas,
@@ -949,15 +1117,22 @@ class DoubleBarChartPainter extends CustomPainter {
   }
 
   void _drawYAxisLabel(Canvas canvas, String text, double x, double y) {
-    final tp = TextPainter(
+    final textPainter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+        style: TextStyle(
+          fontSize: 10,
+          color: Colors.grey[600],
+          fontWeight: FontWeight.w500,
+        ),
       ),
       textDirection: ui.TextDirection.ltr,
     );
-    tp.layout();
-    tp.paint(canvas, Offset(x - tp.width, y - tp.height / 2));
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(x - textPainter.width, y - textPainter.height / 2),
+    );
   }
 
   void _drawValueLabel(
@@ -967,7 +1142,7 @@ class DoubleBarChartPainter extends CustomPainter {
     double y,
     Color color,
   ) {
-    final tp = TextPainter(
+    final textPainter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
@@ -978,8 +1153,11 @@ class DoubleBarChartPainter extends CustomPainter {
       ),
       textDirection: ui.TextDirection.ltr,
     );
-    tp.layout();
-    tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height));
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(x - textPainter.width / 2, y - textPainter.height),
+    );
   }
 
   @override

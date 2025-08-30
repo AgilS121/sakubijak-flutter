@@ -5,6 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:sakubijak/services/apiService.dart';
 
 class AddTransactionScreen extends StatefulWidget {
+  final String? initialJenis; // Tambahkan parameter ini
+
+  const AddTransactionScreen({Key? key, this.initialJenis}) : super(key: key);
+
   @override
   _AddTransactionScreenState createState() => _AddTransactionScreenState();
 }
@@ -25,6 +29,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Set initial tab berdasarkan parameter atau default ke pengeluaran
+    if (widget.initialJenis == 'pemasukan') {
+      isIncome = true;
+    } else {
+      isIncome = false; // Default ke pengeluaran (false = pengeluaran)
+    }
+
     _loadKategori();
   }
 

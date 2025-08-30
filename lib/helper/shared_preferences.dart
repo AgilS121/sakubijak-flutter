@@ -107,4 +107,66 @@ class SharedPrefHelper {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_email');
   }
+
+  // ===== NEW METHODS FOR BOOLEAN VALUES =====
+
+  // Generic method to save boolean values
+  static Future<void> setBool(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
+  // Generic method to get boolean values
+  static Future<bool?> getBool(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key);
+  }
+
+  // Generic method to save string values
+  static Future<void> setString(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+
+  // Generic method to get string values
+  static Future<String?> getString(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
+  }
+
+  // Generic method to save int values
+  static Future<void> setInt(String key, int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(key, value);
+  }
+
+  // Generic method to get int values
+  static Future<int?> getInt(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(key);
+  }
+
+  // Generic method to save double values
+  static Future<void> setDouble(String key, double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(key, value);
+  }
+
+  // Generic method to get double values
+  static Future<double?> getDouble(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(key);
+  }
+
+  // Generic method to remove a key
+  static Future<void> remove(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  // Method to check if a key exists
+  static Future<bool> containsKey(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(key);
+  }
 }

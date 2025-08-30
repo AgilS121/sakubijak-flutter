@@ -314,7 +314,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       fontSize: 16,
                                       color: Color(0xFF00BFA5),
                                       fontWeight: FontWeight.bold,
-                                      // decoration: TextDecoration.underline, // removed underline
                                     ),
                                   ),
                                 ),
@@ -341,7 +340,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => AddTransactionScreen(),
+                                    builder:
+                                        (_) => AddTransactionScreen(
+                                          initialJenis: 'pemasukan',
+                                        ),
                                   ),
                                 );
                                 if (result == true) {
@@ -371,7 +373,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => AddTransactionScreen(),
+                                    builder:
+                                        (_) => AddTransactionScreen(
+                                          initialJenis: 'pengeluaran',
+                                        ),
                                   ),
                                 );
                                 if (result == true) {
@@ -593,7 +598,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => AddTransactionScreen(),
+                              builder:
+                                  (_) => AddTransactionScreen(
+                                    initialJenis: 'pengeluaran',
+                                  ),
                             ),
                           );
                           if (result == true) {
