@@ -16,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _pinController = TextEditingController();
+  final _nohpcontroller = TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -26,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
+    final nohp = _nohpcontroller.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
     final pin = _pinController.text.trim();
@@ -34,6 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty ||
+        nohp.isEmpty ||
         pin.isEmpty) {
       _showError('Semua field wajib diisi.');
       return;
@@ -52,7 +55,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.register(name, email, password, pin);
+      final response = await _apiService.register(
+        name,
+        email,
+        password,
+        pin,
+        nohp,
+      );
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
@@ -140,6 +149,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'example@example.com',
                         _emailController,
                       ),
+                      SizedBox(height: 20),
+                      _buildTextField('NO HP', '628xxxxxxxxx', _nohpcontroller),
                       SizedBox(height: 20),
                       _buildPasswordField(
                         'Password',

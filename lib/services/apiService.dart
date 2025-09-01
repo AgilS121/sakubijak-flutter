@@ -40,6 +40,7 @@ class ApiService {
     String email,
     String password,
     String pin,
+    String nohp,
   ) async {
     final headers = await _getHeaders();
     return http.post(
@@ -50,6 +51,7 @@ class ApiService {
         'email': email,
         'password': password,
         'pin': pin,
+        'no_hp': nohp,
       }),
     );
   }

@@ -408,7 +408,7 @@ class _TargetScreenState extends State<TargetScreen> {
         ),
         SizedBox(height: 10),
         Container(
-          height: 280, // Diperbesar dari 180 menjadi 280
+          height: 320, // Diperbesar untuk menampung riwayat terakhir
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _existingTargets.length,
@@ -438,8 +438,14 @@ class _TargetScreenState extends State<TargetScreen> {
               // Ambil riwayat tabungan
               List<dynamic> riwayatTabungan = target['riwayat_tabungan'] ?? [];
 
+              // Ambil riwayat terakhir
+              Map<String, dynamic>? riwayatTerakhir;
+              if (riwayatTabungan.isNotEmpty) {
+                riwayatTerakhir = riwayatTabungan.last;
+              }
+
               return Container(
-                width: 280, // Diperbesar dari 200 menjadi 280
+                width: 280,
                 margin: EdgeInsets.only(right: 15),
                 padding: EdgeInsets.all(15),
                 decoration: BoxDecoration(
@@ -623,6 +629,7 @@ class _TargetScreenState extends State<TargetScreen> {
                       SizedBox(height: 8),
                     ],
 
+                    // Button Tambah Tabungan
                     if (!isCompleted)
                       SizedBox(
                         width: double.infinity,
@@ -651,6 +658,106 @@ class _TargetScreenState extends State<TargetScreen> {
                           ),
                         ),
                       ),
+
+                    // Riwayat Tambah Tabungan Terakhir
+                    if (!isCompleted && riwayatTerakhir != null) ...[
+                      SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF00BFA5).withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Color(0xFF00BFA5).withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  size: 12,
+                                  color: Color(0xFF00BFA5),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Tabungan Terakhir:',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF00BFA5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.add_circle,
+                                  size: 10,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    () {
+                                      final jumlah =
+                                          double.tryParse(
+                                            riwayatTerakhir!['jumlah']
+                                                .toString(),
+                                          ) ??
+                                          0.0;
+                                      String tanggal = '';
+                                      if (riwayatTerakhir['tanggal'] != null) {
+                                        try {
+                                          final DateTime date = DateTime.parse(
+                                            riwayatTerakhir['tanggal'],
+                                          );
+                                          tanggal =
+                                              '${date.day}/${date.month}/${date.year}';
+                                        } catch (e) {
+                                          tanggal = riwayatTerakhir['tanggal']
+                                              .toString()
+                                              .substring(0, 10);
+                                        }
+                                      }
+                                      return '+Rp ${_formatCurrency(jumlah)} ($tanggal)';
+                                    }(),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.grey[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (riwayatTerakhir!['keterangan'] != null &&
+                                riwayatTerakhir!['keterangan']
+                                    .toString()
+                                    .isNotEmpty) ...[
+                              SizedBox(height: 2),
+                              Text(
+                                'Ket: ${riwayatTerakhir!['keterangan']}',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               );
